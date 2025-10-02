@@ -1,10 +1,11 @@
 %% Load velocity data from ANSYS and model chamber dimensions
 % ANSYS data import
-import_data = importdata("C:\Users\Nida Qayyum\Downloads\Chamber_Simplified_Velocity_2");
+[ANSYS_file, ANSYS_path] = uigetfile('*.*','Select file with ANSYS outputs (titled Chamber_Simplified_Velocity)');
+import_data = importdata([ANSYS_path ANSYS_file]);
 ANSYS_data = import_data.data;
 xc = ANSYS_data(:,2); xc = xc*100; % Chamber x-coordinate from ANSYS mesh
-yc = ANSYS_data(:,4); yc = yc*100; % Chamber y-coordinate from ANSYS mesh
-zc = ANSYS_data(:,3); zc = zc*100; % Chamber z-coordinate from ANSYS mesh
+yc = ANSYS_data(:,4); yc = yc*100; % Chamber y-coordinate from ANSYS mesh (NOTE: y and z axes were flipped in ANSYS)
+zc = ANSYS_data(:,3); zc = zc*100; % Chamber z-coordinate from ANSYS mesh (NOTE: y and z axes were flipped in ANSYS)
 xv = ANSYS_data(:,6); % x-velocity
 yv = ANSYS_data(:,8); % y-velocity
 zv = ANSYS_data(:,7); % z-velocity
