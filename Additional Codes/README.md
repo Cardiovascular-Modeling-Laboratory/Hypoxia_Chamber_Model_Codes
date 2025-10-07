@@ -4,9 +4,9 @@ Chamber Velocity Profile
 
 Filtering Parameters for Gas Phase (parameter sets resulting in minimum, maximum, and mean for each model calibration output variable)
 1. Download results of posterior simulations (x_pars_post_gas_final.csv and y_out_post_gas_final.csv)
-2. Run Chamber_gas_parameters_filtered
+2. Run Chamber_gas_parameters_filtered_PAPER
 
 Filtering Parameters for Gas-Liquid Phase (parameter sets resulting in minimum, maximum, and mean for each model calibration output variable)
 1. Download results of posterior simulations (x_pars_post_liquid_final.csv and y_out_post_liquid_final.csv)
-2. Run Chamber_liquid_parameters_filtered
+2. Run Chamber_liquid_parameters_filtered_PAPER
 
