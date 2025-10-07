@@ -114,7 +114,7 @@ D_range = [0.205 0.237]; % Calculated using Hirschfelder equation
 % Saturation pressure of water vapor corresponding to Temp
 Psat_range = [23.8 92.6];
 % Diffusion coefficient for water vapor in gas corresponding to Temp
-Dw_range = [0.26 0.345]; % Calculated using Hirschfelder equation
+Dw_range = [0.26 0.303]; % Calculated using Hirschfelder equation
 
 % Diffusion coefficient of oxygen in water
 Temp_DO2 = [25+273 40+273];
@@ -149,8 +149,7 @@ D1_O2 = DO2(2,2,3); D2_O2 = DO2(2,6,3); D3_O2 = DO2(6,2,3); D4_O2 = DO2(6,6,3); 
 
 %% Flow Profile Calculation
 % Load file with calculated flow splits from ANSYS data
-file_path = ['Enter file path for Flow_data.mat here'];
-load(file_path,'x_y_por_l2','x_y_por_l3','x_n_avg_l3_2','x_p_avg_l3_2','x_n_avg','x_p_avg','x_p_avg_l1','x_n_avg_l1','x_p_avg_l3','x_n_avg_l3')
+load("C:\Users\Nida Qayyum\Documents\MATLAB\Flow_data.mat",'x_y_por_l2','x_y_por_l3','x_n_avg_l3_2','x_p_avg_l3_2','x_n_avg','x_p_avg','x_p_avg_l1','x_n_avg_l1','x_p_avg_l3','x_n_avg_l3')
 
 Qin = 450/60; % Total inlet flow to chamber
 Q = zeros(14,9,3);
@@ -363,7 +362,7 @@ f0_in = 0; % Inlet oxygen fraction
 cO2in = f0_in*P/(R*T_in); % Inlet oxygen concentration
 
 % Solving parameters
-tend = 900;
+tend = 1800;
 dt = 0.01;
 s = round(tend/dt);
 t = zeros(1,2);
@@ -1733,5 +1732,4 @@ for sq = 1:round(s)
    
     V1_end = Vm1(end); V2_end = Vm2(end); V3_end = Vm3(end); V4_end = Vm4(end); V5_end = Vm5(end); V6_end = Vm6(end);
 end
-
 end
