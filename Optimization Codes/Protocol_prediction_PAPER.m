@@ -89,6 +89,13 @@ end
 
 T_in = L2 + 273; % Estimate chamber inlet for the run (assumed to be constant)
 
+%% Velocity Profile for Functions
+% Load path for Flow_data.mat file with the velocity split data
+[filename_vel, vel_path] = ...
+    uigetfile('*.mat', 'Select the file titled Flow_data.mat',[]);
+file_path_vel = [vel_path filename_vel];
+
+
 %% Protocol Bounds and Optimization Thresholds
 % Inlet oxygen fraction bounds for decreasing oxygen segment
 ll_dec = 0;
@@ -126,7 +133,7 @@ for i = 1:length(target_c)-1
         % Run model with results of previous iteration to obtain the initial condition for current iteration
         f0 = sol_f(i-1); % Inlet oxygen fraction from previous iteration
         tdur = sol_dur(i-1); % Run duration from previous iteration
-        sol_prev = Chamber_initial_condition(T1,k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,f0,tdur);
+        sol_prev = Chamber_initial_condition(T1,k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,f0,tdur,file_path_vel);
         ic = sol_prev; % Initial condition of chamber stored in structure
 
         % Run current iteration
@@ -150,7 +157,7 @@ for i = 1:length(target_c)-1
 
         % Create optimization function and run Pareto front solver (gamultiobj)
         toggle = 1; % Define function output to be objective functions (toggle = 2 is to have function output be the chamber state for initial condition)
-        objfun = @(fdur)opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,fdur(1),fdur(2),target_prev,target,target_t,toggle,ic,O2_dir,T_in);
+        objfun = @(fdur)opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,fdur(1),fdur(2),target_prev,target,target_t,toggle,ic,O2_dir,T_in,file_path_vel);
         options = optimoptions('gamultiobj', 'Display','iter','MaxGenerations', 10,'PopulationSize',100,'ParetoFraction',0.5,'UseParallel', true);
         [sol, fval] = gamultiobj(objfun, 2, [], [], [], [], lb, ub, [], options); % Run optimization
         test_f = sol(:,1); % Solutions for inlet oxygen fraction
@@ -199,7 +206,7 @@ for i = 1:length(target_c)-1
                 t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                 f_vals = [test_f(test_row), sol_f_next];
                 toggle = 0; % Define function output to be for increasing oxygen during segment
-                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                 if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                     if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is lower than the target or there is not inflection --> increase run duration
                         target_reached = 0; % Initialize to enter while loop
@@ -212,7 +219,7 @@ for i = 1:length(target_c)-1
                             end
                             counter_inc = counter_inc + 1;
                             t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                             if abs(target_diff(1)) < O2_threshold
                                 target_reached = 1; % End while loop
                             else
@@ -235,7 +242,7 @@ for i = 1:length(target_c)-1
                             end
                             counter_dec = counter_dec + 1;
                             t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                             if abs(target_diff(1)) < O2_threshold
                                 target_reached = 1; % End while loop
                             else
@@ -304,7 +311,7 @@ for i = 1:length(target_c)-1
             t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
             f_vals = [test_f(test_row), sol_f_next];
             toggle = 0; % Define function output to be for increasing segment
-            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
             if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                 if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is lower than the target or there is not inflection --> increase run duration
                     target_reached = 0; % Initialize to enter while loop
@@ -317,7 +324,7 @@ for i = 1:length(target_c)-1
                         end
                         counter_inc = counter_inc + 1;
                         t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                        target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                        target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                         if abs(target_diff(1)) < O2_threshold
                             target_reached = 1; % End while loop
                         else
@@ -340,7 +347,7 @@ for i = 1:length(target_c)-1
                         end
                         counter_dec = counter_dec + 1;
                         t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                        target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                        target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                         if abs(target_diff(1)) < O2_threshold
                             target_reached = 1; % End while loop
                         else
@@ -376,7 +383,7 @@ for i = 1:length(target_c)-1
         f0 = sol_f(i-1); % Inlet oxygen fraction from previous iteration
         tdur = sol_dur(i-1); % Run duration from previous iteration
         toggle = 2; % Set function output to be the chamber state for initial condition
-        sol_prev = opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,f0,tdur,target_prev,target,target_t,toggle,ic,O2_dir,T_in);
+        sol_prev = opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,f0,tdur,target_prev,target,target_t,toggle,ic,O2_dir,T_in,file_path_vel);
         ic = sol_prev; % Initial condition of chamber stored in structure
 
         % Primary optimization method
@@ -400,7 +407,7 @@ for i = 1:length(target_c)-1
 
         % Create optimization function and run Pareto front solver (gamultiobj)
         toggle = 1; % Define function output to be objective functions (toggle = 2 is to have function output be the chamber state for initial condition)
-        objfun = @(fdur)opt_function_primary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,sol_f(i),fdur(1),target_prev,target,target_t,toggle,ic,O2_dir,fdur(2),T_in);
+        objfun = @(fdur)opt_function_primary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,sol_f(i),fdur(1),target_prev,target,target_t,toggle,ic,O2_dir,fdur(2),T_in,file_path_vel);
         options = optimoptions('gamultiobj', 'Display','iter','MaxGenerations', 10,'PopulationSize',100,'ParetoFraction',0.5,'UseParallel', true);
         [sol, fval] = gamultiobj(objfun, 2, [], [], [], [], lb, ub, [], options); % Run optimization
         test_dur = sol(:,1); % Solutions for run duration of current segment
@@ -431,7 +438,7 @@ for i = 1:length(target_c)-1
             % Backup method
             clear objfun options
             toggle = 1; % Define function output to be objective functions
-            objfun = @(fdur)opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,sol_f(i),fdur,target_prev,target,target_t,toggle,ic,O2_dir,T_in);
+            objfun = @(fdur)opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,sol_f(i),fdur,target_prev,target,target_t,toggle,ic,O2_dir,T_in,file_path_vel);
             options = optimoptions('gamultiobj', 'Display','iter','MaxGenerations', 10,'PopulationSize',100,'ParetoFraction',0.5,'UseParallel', true);
             [sol, fval] = gamultiobj(objfun, 1, [], [], [], [], lb(1), ub(1), [], options); % Run optimization
             test_dur = sol; % Solutions for run duration (inlet oxygen fraction for current segment determined from previous iteration)
@@ -479,7 +486,7 @@ for i = 1:length(target_c)-1
                         t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                         f_vals = [sol_f(i), sol_f_next];
                         toggle = 0; % Define function output to be for increasing oxygen during segment
-                        target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                        target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                         if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concentration threshold or there is no inflection point
                             if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is lower than the target or there is not inflection --> increase run duration
                                 target_reached = 0; % Initialize to enter while loop
@@ -492,7 +499,7 @@ for i = 1:length(target_c)-1
                                     end
                                     counter_inc = counter_inc + 1;
                                     t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                     if abs(target_diff(1)) < O2_threshold 
                                         target_reached = 1; % End while loop
                                     else
@@ -515,7 +522,7 @@ for i = 1:length(target_c)-1
                                     end
                                     counter_dec = counter_dec + 1;
                                     t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                     if abs(target_diff(1)) < O2_threshold
                                         target_reached = 1; % End while loop
                                     else
@@ -584,7 +591,7 @@ for i = 1:length(target_c)-1
                     t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                     f_vals = [sol_f(i), sol_f_next];
                     toggle = 0; % Define function output to be for increasing segment
-                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                     if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                         if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is lower than the target or there is not inflection --> increase run duration
                             target_reached = 0; % Initialize to enter while loop
@@ -597,7 +604,7 @@ for i = 1:length(target_c)-1
                                 end
                                 counter_inc = counter_inc + 1;
                                 t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                 if abs(target_diff(1)) < O2_threshold
                                     target_reached = 1; % End while loop
                                 else
@@ -620,7 +627,7 @@ for i = 1:length(target_c)-1
                                 end
                                 counter_dec = counter_dec + 1;
                                 t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                 if abs(target_diff(1)) < O2_threshold
                                     target_reached = 1; % End while loop
                                 else
@@ -671,7 +678,7 @@ for i = 1:length(target_c)-1
                         t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant decrease
                         f_vals = [sol_f(i), sol_f_next];
                         toggle = 1; % Define function output to be for decreasing oxygen during segment
-                        target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                        target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                         if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1  % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                             if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is higher than target or there is no inflection --> increase run duration
                                 target_reached = 0; % Initialize to enter while loop
@@ -684,7 +691,7 @@ for i = 1:length(target_c)-1
                                     end
                                     counter_inc = counter_inc + 1;
                                     t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                     if abs(target_diff(1)) < O2_threshold
                                         target_reached = 1; % End while loop
                                     else
@@ -707,7 +714,7 @@ for i = 1:length(target_c)-1
                                     end
                                     counter_dec = counter_dec + 1;
                                     t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                     if abs(target_diff(1)) < O2_threshold
                                         target_reached = 1; % End while loop
                                     else
@@ -776,7 +783,7 @@ for i = 1:length(target_c)-1
                     t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                     f_vals = [sol_f(i), sol_f_next];
                     toggle = 1; % Define function output to be for decreasing segment
-                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                     if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concentration threshold or there is no inflection point
                         if target_diff(1) > 0 || target_diff(2) ~= 1
                             target_reached = 0; % Initialize to enter while loop
@@ -789,7 +796,7 @@ for i = 1:length(target_c)-1
                                 end
                                 counter_inc = counter_inc + 1;
                                 t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                 if abs(target_diff(1)) < O2_threshold
                                     target_reached = 1; % End while loop
                                 else
@@ -812,7 +819,7 @@ for i = 1:length(target_c)-1
                                 end
                                 counter_dec = counter_dec + 1;
                                 t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                 if abs(target_diff(1)) < O2_threshold
                                     target_reached = 1; % End while loop
                                 else
@@ -876,7 +883,7 @@ for i = 1:length(target_c)-1
 
                         clear objfun options
                         toggle = 1; % Define function output to be objective functions
-                        objfun = @(fdur)opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,sol_f(i),fdur,target_prev,target,target_t,toggle,ic,O2_dir,T_in);
+                        objfun = @(fdur)opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,sol_f(i),fdur,target_prev,target,target_t,toggle,ic,O2_dir,T_in,file_path_vel);
                         options = optimoptions('gamultiobj', 'Display','iter','MaxGenerations', 10,'PopulationSize',100,'ParetoFraction',0.5,'UseParallel', true);
                         [sol, fval] = gamultiobj(objfun, 1, [], [], [], [], lb(1), ub(1), [], options); % Run optimization
                         test_dur = sol; % Solutions for run duration (inlet oxygen fraction for current segment determined from previous iteration)
@@ -924,7 +931,7 @@ for i = 1:length(target_c)-1
                                     t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                                     f_vals = [sol_f(i), sol_f_next];
                                     toggle = 0; % Define function output to be for increasing oxygen during segment
-                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                     if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                                         if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is lower than the target or there is not inflection --> increase run duration
                                             target_reached = 0; % Initialize to enter while loop
@@ -937,7 +944,7 @@ for i = 1:length(target_c)-1
                                                 end
                                                 counter_inc = counter_inc + 1;
                                                 t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                                 if abs(target_diff(1)) < O2_threshold
                                                     target_reached = 1; % End while loop
                                                 else
@@ -960,7 +967,7 @@ for i = 1:length(target_c)-1
                                                 end
                                                 counter_dec = counter_dec + 1;
                                                 t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                                 if abs(target_diff(1)) < O2_threshold
                                                     target_reached = 1; % End while loop
                                                 else
@@ -1029,7 +1036,7 @@ for i = 1:length(target_c)-1
                                 t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                                 f_vals = [sol_f(i), sol_f_next];
                                 toggle = 0; % Define function output to be for increasing segment
-                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                 if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                                     if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is lower than the target or there is not inflection --> increase run duration
                                         target_reached = 0; % Initialize to enter while loop
@@ -1042,7 +1049,7 @@ for i = 1:length(target_c)-1
                                             end
                                             counter_inc = counter_inc + 1;
                                             t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                             if abs(target_diff(1)) < O2_threshold
                                                 target_reached = 1; % End while loop
                                             else
@@ -1065,7 +1072,7 @@ for i = 1:length(target_c)-1
                                             end
                                             counter_dec = counter_dec + 1;
                                             t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                             if abs(target_diff(1)) < O2_threshold
                                                 target_reached = 1; % End while loop
                                             else
@@ -1116,7 +1123,7 @@ for i = 1:length(target_c)-1
                                     t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant decrease
                                     f_vals = [sol_f(i), sol_f_next];
                                     toggle = 1; % Define function output to be for decreasing oxygen during segment
-                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                     if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1  % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                                         if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is higher than target or there is no inflection --> increase run duration
                                             target_reached = 0; % Initialize to enter while loop
@@ -1129,7 +1136,7 @@ for i = 1:length(target_c)-1
                                                 end
                                                 counter_inc = counter_inc + 1;
                                                 t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                                 if abs(target_diff(1)) < O2_threshold
                                                     target_reached = 1; % End while loop
                                                 else
@@ -1152,7 +1159,7 @@ for i = 1:length(target_c)-1
                                                 end
                                                 counter_dec = counter_dec + 1;
                                                 t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                                 if abs(target_diff(1)) < O2_threshold
                                                     target_reached = 1; % End while loop
                                                 else
@@ -1221,7 +1228,7 @@ for i = 1:length(target_c)-1
                                 t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                                 f_vals = [sol_f(i), sol_f_next];
                                 toggle = 1; % Define function output to be for decreasing segment
-                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                 if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concentration threshold or there is no inflection point
                                     if target_diff(1) > 0 || target_diff(2) ~= 1
                                         target_reached = 0; % Initialize to enter while loop
@@ -1234,7 +1241,7 @@ for i = 1:length(target_c)-1
                                             end
                                             counter_inc = counter_inc + 1;
                                             t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                             if abs(target_diff(1)) < O2_threshold
                                                 target_reached = 1; % End while loop
                                             else
@@ -1257,7 +1264,7 @@ for i = 1:length(target_c)-1
                                             end
                                             counter_dec = counter_dec + 1;
                                             t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                             if abs(target_diff(1)) < O2_threshold
                                                 target_reached = 1; % End while loop
                                             else
@@ -1302,7 +1309,7 @@ for i = 1:length(target_c)-1
                         
                         clear objfun options
                         toggle = 1; % Define function output to be objective functions
-                        objfun = @(fdur)opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,sol_f(i),fdur,target_prev,target,target_t,toggle,ic,O2_dir,T_in);
+                        objfun = @(fdur)opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,sol_f(i),fdur,target_prev,target,target_t,toggle,ic,O2_dir,T_in,file_path_vel);
                         options = optimoptions('gamultiobj', 'Display','iter','MaxGenerations', 10,'PopulationSize',100,'ParetoFraction',0.5,'UseParallel', true);
                         [sol, fval] = gamultiobj(objfun, 1, [], [], [], [], lb(1), ub(1), [], options); % Run optimization
                         test_dur = sol; % Solutions for run duration (inlet oxygen fraction for current segment determined from previous iteration)
@@ -1350,7 +1357,7 @@ for i = 1:length(target_c)-1
                                     t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                                     f_vals = [sol_f(i), sol_f_next];
                                     toggle = 0; % Define function output to be for increasing oxygen during segment
-                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                     if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                                         if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is lower than the target or there is not inflection --> increase run duration
                                             target_reached = 0; % Initialize to enter while loop
@@ -1363,7 +1370,7 @@ for i = 1:length(target_c)-1
                                                 end
                                                 counter_inc = counter_inc + 1;
                                                 t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                                 if abs(target_diff(1)) < O2_threshold
                                                     target_reached = 1; % End while loop
                                                 else
@@ -1386,7 +1393,7 @@ for i = 1:length(target_c)-1
                                                 end
                                                 counter_dec = counter_dec + 1;
                                                 t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                                 if abs(target_diff(1)) < O2_threshold
                                                     target_reached = 1; % End while loop
                                                 else
@@ -1455,7 +1462,7 @@ for i = 1:length(target_c)-1
                                 t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                                 f_vals = [sol_f(i), sol_f_next];
                                 toggle = 0; % Define function output to be for increasing segment
-                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                 if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                                     if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is lower than the target or there is not inflection --> increase run duration
                                         target_reached = 0; % Initialize to enter while loop
@@ -1468,7 +1475,7 @@ for i = 1:length(target_c)-1
                                             end
                                             counter_inc = counter_inc + 1;
                                             t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                             if abs(target_diff(1)) < O2_threshold
                                                 target_reached = 1; % End while loop
                                             else
@@ -1491,7 +1498,7 @@ for i = 1:length(target_c)-1
                                             end
                                             counter_dec = counter_dec + 1;
                                             t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                             if abs(target_diff(1)) < O2_threshold
                                                 target_reached = 1; % End while loop
                                             else
@@ -1542,7 +1549,7 @@ for i = 1:length(target_c)-1
                                     t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant decrease
                                     f_vals = [sol_f(i), sol_f_next];
                                     toggle = 1; % Define function output to be for decreasing oxygen during segment
-                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                    target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                     if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1  % Difference between segment end target and actual value is not within oxygen concencentration threshold or there is no inflection point
                                         if target_diff(1) > 0 || target_diff(2) ~= 1 % Actual value is higher than target or there is no inflection --> increase run duration
                                             target_reached = 0; % Initialize to enter while loop
@@ -1555,7 +1562,7 @@ for i = 1:length(target_c)-1
                                                 end
                                                 counter_inc = counter_inc + 1;
                                                 t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                                 if abs(target_diff(1)) < O2_threshold
                                                     target_reached = 1; % End while loop
                                                 else
@@ -1578,7 +1585,7 @@ for i = 1:length(target_c)-1
                                                 end
                                                 counter_dec = counter_dec + 1;
                                                 t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                                 if abs(target_diff(1)) < O2_threshold
                                                     target_reached = 1; % End while loop
                                                 else
@@ -1647,7 +1654,7 @@ for i = 1:length(target_c)-1
                                 t_vals = [test_dur(test_row), 200]; % Run past current segment to fully capture remnant increase
                                 f_vals = [sol_f(i), sol_f_next];
                                 toggle = 1; % Define function output to be for decreasing segment
-                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                 if abs(target_diff(1)) > O2_threshold || target_diff(2) ~= 1 % Difference between segment end target and actual value is not within oxygen concentration threshold or there is no inflection point
                                     if target_diff(1) > 0 || target_diff(2) ~= 1
                                         target_reached = 0; % Initialize to enter while loop
@@ -1660,7 +1667,7 @@ for i = 1:length(target_c)-1
                                             end
                                             counter_inc = counter_inc + 1;
                                             t_vals = [test_dur(test_row) + counter_inc*int, 200];
-                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                             if abs(target_diff(1)) < O2_threshold
                                                 target_reached = 1; % End while loop
                                             else
@@ -1683,7 +1690,7 @@ for i = 1:length(target_c)-1
                                             end
                                             counter_dec = counter_dec + 1;
                                             t_vals = [test_dur(test_row) - counter_dec*int, 200];
-                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t);
+                                            target_diff = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel);
                                             if abs(target_diff(1)) < O2_threshold
                                                 target_reached = 1; % End while loop
                                             else

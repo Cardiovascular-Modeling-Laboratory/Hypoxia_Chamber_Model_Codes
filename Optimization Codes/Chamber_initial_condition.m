@@ -1,9 +1,7 @@
-function f = opt_function_secondary(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,f0,tdur,target_prev,target,target_t,toggle,ic,O2_dir,T_in,file_path_vel)
+function f = Chamber_initial_condition(T1,k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,f0,tdur,file_path_vel)
 
 %% Temperature data
 % Find time on temperature curve using Well 1
-T1 = ic.T1_ic; % Extract initial temperature
-
 if T1>=20.7 && T1<23.4
     t_m1 = (2000/3)*T1 - 13800;
 elseif T1>=23.4 && T1<25.1
@@ -98,6 +96,7 @@ T(1:4,1:5,3) = T1; T(1:4,6:9,3) = T2;
 T(5:9,1:5,3) = T3; T(5:9,6:9,3) = T4;
 T(10:14,1:5,3) = T5; T(10:14,6:9,3) = T6;
 T = T + 273; % Temperature conversion from celsius to kelvin
+T_in = T(1,3,2); % Approximate inlet gas temperature to chamber (sourced from gas tanks)
 
 % Liquid temperatures inside wells (determined from regression of measured gas vs. liquid temeperatures)
 T_w = zeros(14,9,3);
@@ -356,6 +355,8 @@ O2consump = O2Met*No_Cells; % Total oxygen consumption per well
 ke = 5.5e-10; % Michaelis-Menten constant (mol/cm3)
 
 % Adjustable system parameters
+f0_i = 0.21; % Initial oxygen fraction
+Total_volm = 0.75; % Total liquid volume per well (mL)
 SC = 0.95; % Salinity correction factor (1 for water and 0.95 for Tyrode's solution)
 f0_in = f0; % Inlet oxygen fraction
 cO2in = f0_in*P/(R*T_in); % Inlet oxygen concentration
@@ -369,25 +370,26 @@ dx = 1; dy = 1; % 2-D element dimensions
 Vw1 = 1; Vw2 = 1; Vw3 = 1; Vw4 = 1; Vw5 = 1; Vw6 = 1; % (=0 for no liquid present in well and =1 for liquid present)
 cells_1 = 0; cells_2 = 0; cells_3 = 1; cells_4 = 0; cells_5 = 0; cells_6 = 0; % (=0 for no cells present in well and =1 for cells present)
 protocol = 0; % Step change
-counter_o = 0;
 
 % System initial conditions
 c = zeros([14,9,3,2]); % Oxygen concentration in gas phase
-c(:,:,:,1) = ic.c_ic;
+c(1:4,1:5,3,1) = f0_i*P/(R*T(2,2,3)); c(1:4,6:9,3,1) = f0_i*P/(R*T(2,6,3)); c(5:9,1:5,3,1) = f0_i*P/(R*T(6,2,3)); c(5:9,6:9,3,1) = f0_i*P/(R*T(6,6,3)); c(10:14,1:5,3,1) = f0_i*P/(R*T(11,2,3)); c(10:14,6:9,3,1) = f0_i*P/(R*T(11,6,3)); c(:,:,2,1) = f0_i*P/(R*T(1,1,2)); c(:,:,1,1) = f0_i*P/(R*T(1,1,1));
 
 % Average oxygen concetration in gas phase above each well
 c1_ch = zeros(1,2); c2_ch = zeros(1,2); c3_ch = zeros(1,2); c4_ch = zeros(1,2); c5_ch = zeros(1,2); c6_ch = zeros(1,2);
-c1_ch(1) = ic.c1_ch_ic; c2_ch(1) = ic.c2_ch_ic; c3_ch(1) = ic.c3_ch_ic; c4_ch(1) = ic.c4_ch_ic; c5_ch(1) = ic.c5_ch_ic; c6_ch(1) = ic.c6_ch_ic;
+c1_ch(1) = mean(c(2:4,2:4,3,1),'all'); c2_ch(1) = mean(c(2:4,6:8,3,1),'all'); c3_ch(1) = mean(c(6:8,2:4,3,1),'all'); c4_ch(1) = mean(c(6:8,6:8,3,1),'all'); c5_ch(1) = mean(c(11:13,2:4,3,1),'all'); c6_ch(1) = mean(c(11:13,6:8,3,1),'all');
 
 Pw = zeros([14,9,3,2]); % Water vapor pressure in gas phase
-Pw(:,:,:,1) = ic.Pw_ic;
 % Average water vapor pressure in gas phase above each well
 Pw1_avg = zeros(1,2); Pw2_avg = zeros(1,2); Pw3_avg = zeros(1,2); Pw4_avg = zeros(1,2); Pw5_avg = zeros(1,2); Pw6_avg = zeros(1,2);
-Pw1_avg(1) = ic.Pw1_avg_ic; Pw2_avg(1) = ic.Pw2_avg_ic; Pw3_avg(1) = ic.Pw3_avg_ic; Pw4_avg(1) = ic.Pw4_avg_ic; Pw5_avg(1) = ic.Pw5_avg_ic; Pw6_avg(1) = ic.Pw6_avg_ic;
+Pw1_avg(1) = mean(Pw(2:4,2:4,3,1),'all'); Pw2_avg(1) = mean(Pw(2:4,6:8,3,1),'all'); Pw3_avg(1) = mean(Pw(6:8,2:4,3,1),'all'); Pw4_avg(1) = mean(Pw(6:8,6:8,3,1),'all'); Pw5_avg(1) = mean(Pw(11:13,2:4,3,1),'all'); Pw6_avg(1) = mean(Pw(11:13,6:8,3,1),'all');
 
 % Liquid volume in wells
 Vm1 = zeros(1,2); Vm2 = zeros(1,2); Vm3 = zeros(1,2); Vm4 = zeros(1,2); Vm5 = zeros(1,2); Vm6 = zeros(1,2);
-Vm1(1) = ic.Vm1_ic; Vm2(1) = ic.Vm2_ic; Vm3(1) = ic.Vm3_ic; Vm4(1) = ic.Vm4_ic; Vm5(1) = ic.Vm5_ic; Vm6(1) = ic.Vm6_ic;
+Vm1(1) = Total_volm; Vm2(1) = Total_volm; Vm3(1) = Total_volm; Vm4(1) = Total_volm; Vm5(1) = Total_volm; Vm6(1) = Total_volm;
+
+% Initial liquid temperatures for each well
+Temp_well1_initial = T_w(2,2,3); Temp_well2_initial = T_w(2,6,3); Temp_well3_initial = T_w(6,2,3); Temp_well4_initial = T_w(6,6,3); Temp_well5_initial = T_w(11,2,3); Temp_well6_initial = T_w(11,6,3);
 
 % Dissolved oxygen concentration in wells (at 20 discrete points for each well)
 c1_1 = zeros(1,2); c1_2 = zeros(1,2); c1_3 = zeros(1,2); c1_4 = zeros(1,2); c1_5 = zeros(1,2); c1_6 = zeros(1,2); c1_7 = zeros(1,2); c1_8 = zeros(1,2); c1_9 = zeros(1,2); c1_10 = zeros(1,2); c1_11 = zeros(1,2); c1_12 = zeros(1,2); c1_13 = zeros(1,2); c1_14 = zeros(1,2); c1_15 = zeros(1,2); c1_16 = zeros(1,2); c1_17 = zeros(1,2); c1_18 = zeros(1,2); c1_19 = zeros(1,2); c1_20 = zeros(1,2);
@@ -396,21 +398,27 @@ c3_1 = zeros(1,2); c3_2 = zeros(1,2); c3_3 = zeros(1,2); c3_4 = zeros(1,2); c3_5
 c4_1 = zeros(1,2); c4_2 = zeros(1,2); c4_3 = zeros(1,2); c4_4 = zeros(1,2); c4_5 = zeros(1,2); c4_6 = zeros(1,2); c4_7 = zeros(1,2); c4_8 = zeros(1,2); c4_9 = zeros(1,2); c4_10 = zeros(1,2); c4_11 = zeros(1,2); c4_12 = zeros(1,2); c4_13 = zeros(1,2); c4_14 = zeros(1,2); c4_15 = zeros(1,2); c4_16 = zeros(1,2); c4_17 = zeros(1,2); c4_18 = zeros(1,2); c4_19 = zeros(1,2); c4_20 = zeros(1,2);
 c5_1 = zeros(1,2); c5_2 = zeros(1,2); c5_3 = zeros(1,2); c5_4 = zeros(1,2); c5_5 = zeros(1,2); c5_6 = zeros(1,2); c5_7 = zeros(1,2); c5_8 = zeros(1,2); c5_9 = zeros(1,2); c5_10 = zeros(1,2); c5_11 = zeros(1,2); c5_12 = zeros(1,2); c5_13 = zeros(1,2); c5_14 = zeros(1,2); c5_15 = zeros(1,2); c5_16 = zeros(1,2); c5_17 = zeros(1,2); c5_18 = zeros(1,2); c5_19 = zeros(1,2); c5_20 = zeros(1,2);
 c6_1 = zeros(1,2); c6_2 = zeros(1,2); c6_3 = zeros(1,2); c6_4 = zeros(1,2); c6_5 = zeros(1,2); c6_6 = zeros(1,2); c6_7 = zeros(1,2); c6_8 = zeros(1,2); c6_9 = zeros(1,2); c6_10 = zeros(1,2); c6_11 = zeros(1,2); c6_12 = zeros(1,2); c6_13 = zeros(1,2); c6_14 = zeros(1,2); c6_15 = zeros(1,2); c6_16 = zeros(1,2); c6_17 = zeros(1,2); c6_18 = zeros(1,2); c6_19 = zeros(1,2); c6_20 = zeros(1,2);
-c1_1(1)= ic.c1_1_ic; c1_2(1)= ic.c1_2_ic; c1_3(1)= ic.c1_3_ic; c1_4(1)= ic.c1_4_ic; c1_5(1)= ic.c1_5_ic; c1_6(1)= ic.c1_6_ic; c1_7(1)= ic.c1_7_ic; c1_8(1)= ic.c1_8_ic; c1_9(1)= ic.c1_9_ic; c1_10(1)= ic.c1_10_ic; c1_11(1)= ic.c1_11_ic; c1_12(1)= ic.c1_12_ic; c1_13(1)= ic.c1_13_ic; c1_14(1)= ic.c1_14_ic; c1_15(1)= ic.c1_15_ic; c1_16(1)= ic.c1_16_ic; c1_17(1)= ic.c1_17_ic; c1_18(1) = ic.c1_18_ic; c1_19(1) = ic.c1_19_ic; c1_20(1) = ic.c1_20_ic;
-c2_1(1)= ic.c2_1_ic; c2_2(1)= ic.c2_2_ic; c2_3(1)= ic.c2_3_ic; c2_4(1)= ic.c2_4_ic; c2_5(1)= ic.c2_5_ic; c2_6(1)= ic.c2_6_ic; c2_7(1)= ic.c2_7_ic; c2_8(1)= ic.c2_8_ic; c2_9(1)= ic.c2_9_ic; c2_10(1)= ic.c2_10_ic; c2_11(1)= ic.c2_11_ic; c2_12(1)= ic.c2_12_ic; c2_13(1)= ic.c2_13_ic; c2_14(1)= ic.c2_14_ic; c2_15(1)= ic.c2_15_ic; c2_16(1)= ic.c2_16_ic; c2_17(1)= ic.c2_17_ic; c2_18(1) = ic.c2_18_ic; c2_19(1) = ic.c2_19_ic; c2_20(1) = ic.c2_20_ic;
-c3_1(1)= ic.c3_1_ic; c3_2(1)= ic.c3_2_ic; c3_3(1)= ic.c3_3_ic; c3_4(1)= ic.c3_4_ic; c3_5(1)= ic.c3_5_ic; c3_6(1)= ic.c3_6_ic; c3_7(1)= ic.c3_7_ic; c3_8(1)= ic.c3_8_ic; c3_9(1)= ic.c3_9_ic; c3_10(1)= ic.c3_10_ic; c3_11(1)= ic.c3_11_ic; c3_12(1)= ic.c3_12_ic; c3_13(1)= ic.c3_13_ic; c3_14(1)= ic.c3_14_ic; c3_15(1)= ic.c3_15_ic; c3_16(1)= ic.c3_16_ic; c3_17(1)= ic.c3_17_ic; c3_18(1) = ic.c3_18_ic; c3_19(1) = ic.c3_19_ic; c3_20(1) = ic.c3_20_ic;
-c4_1(1)= ic.c4_1_ic; c4_2(1)= ic.c4_2_ic; c4_3(1)= ic.c4_3_ic; c4_4(1)= ic.c4_4_ic; c4_5(1)= ic.c4_5_ic; c4_6(1)= ic.c4_6_ic; c4_7(1)= ic.c4_7_ic; c4_8(1)= ic.c4_8_ic; c4_9(1)= ic.c4_9_ic; c4_10(1)= ic.c4_10_ic; c4_11(1)= ic.c4_11_ic; c4_12(1)= ic.c4_12_ic; c4_13(1)= ic.c4_13_ic; c4_14(1)= ic.c4_14_ic; c4_15(1)= ic.c4_15_ic; c4_16(1)= ic.c4_16_ic; c4_17(1)= ic.c4_17_ic; c4_18(1) = ic.c4_18_ic; c4_19(1) = ic.c4_19_ic; c4_20(1) = ic.c4_20_ic;
-c5_1(1)= ic.c5_1_ic; c5_2(1)= ic.c5_2_ic; c5_3(1)= ic.c5_3_ic; c5_4(1)= ic.c5_4_ic; c5_5(1)= ic.c5_5_ic; c5_6(1)= ic.c5_6_ic; c5_7(1)= ic.c5_7_ic; c5_8(1)= ic.c5_8_ic; c5_9(1)= ic.c5_9_ic; c5_10(1)= ic.c5_10_ic; c5_11(1)= ic.c5_11_ic; c5_12(1)= ic.c5_12_ic; c5_13(1)= ic.c5_13_ic; c5_14(1)= ic.c5_14_ic; c5_15(1)= ic.c5_15_ic; c5_16(1)= ic.c5_16_ic; c5_17(1)= ic.c5_17_ic; c5_18(1) = ic.c5_18_ic; c5_19(1) = ic.c5_19_ic; c5_20(1) = ic.c5_20_ic;
-c6_1(1)= ic.c6_1_ic; c6_2(1)= ic.c6_2_ic; c6_3(1)= ic.c6_3_ic; c6_4(1)= ic.c6_4_ic; c6_5(1)= ic.c6_5_ic; c6_6(1)= ic.c6_6_ic; c6_7(1)= ic.c6_7_ic; c6_8(1)= ic.c6_8_ic; c6_9(1)= ic.c6_9_ic; c6_10(1)= ic.c6_10_ic; c6_11(1)= ic.c6_11_ic; c6_12(1)= ic.c6_12_ic; c6_13(1)= ic.c6_13_ic; c6_14(1)= ic.c6_14_ic; c6_15(1)= ic.c6_15_ic; c6_16(1)= ic.c6_16_ic; c6_17(1)= ic.c6_17_ic; c6_18(1) = ic.c6_18_ic; c6_19(1) = ic.c6_19_ic; c6_20(1) = ic.c6_20_ic;
+cells_initial1 = 0.21*(P - interp1(Temp,Psat_range,Temp_well1_initial,'linear','extrap'))*SC*interp1(Temp_sol,Beta_O2_range,Temp_well1_initial,'linear','extrap');
+cells_initial2 = 0.21*(P - interp1(Temp,Psat_range,Temp_well2_initial,'linear','extrap'))*SC*interp1(Temp_sol,Beta_O2_range,Temp_well2_initial,'linear','extrap');
+cells_initial3 = 0.21*(P - interp1(Temp,Psat_range,Temp_well3_initial,'linear','extrap'))*SC*interp1(Temp_sol,Beta_O2_range,Temp_well3_initial,'linear','extrap');
+cells_initial4 = 0.21*(P - interp1(Temp,Psat_range,Temp_well4_initial,'linear','extrap'))*SC*interp1(Temp_sol,Beta_O2_range,Temp_well4_initial,'linear','extrap');
+cells_initial5 = 0.21*(P - interp1(Temp,Psat_range,Temp_well5_initial,'linear','extrap'))*SC*interp1(Temp_sol,Beta_O2_range,Temp_well5_initial,'linear','extrap');
+cells_initial6 = 0.21*(P - interp1(Temp,Psat_range,Temp_well6_initial,'linear','extrap'))*SC*interp1(Temp_sol,Beta_O2_range,Temp_well6_initial,'linear','extrap');
+c1_1(1)= cells_initial1; c1_2(1)= cells_initial1; c1_3(1)= cells_initial1; c1_4(1)= cells_initial1; c1_5(1)= cells_initial1; c1_6(1)= cells_initial1; c1_7(1)= cells_initial1; c1_8(1)= cells_initial1; c1_9(1)= cells_initial1; c1_10(1)= cells_initial1; c1_11(1)= cells_initial1; c1_12(1)= cells_initial1; c1_13(1)= cells_initial1; c1_14(1)= cells_initial1; c1_15(1)= cells_initial1; c1_16(1)= cells_initial1; c1_17(1)= cells_initial1; c1_18(1) = cells_initial1; c1_19(1) = cells_initial1; c1_20(1) = cells_initial1;
+c2_1(1)= cells_initial2; c2_2(1)= cells_initial2; c2_3(1)= cells_initial2; c2_4(1)= cells_initial2; c2_5(1)= cells_initial2; c2_6(1)= cells_initial2; c2_7(1)= cells_initial2; c2_8(1)= cells_initial2; c2_9(1)= cells_initial2; c2_10(1)= cells_initial2; c2_11(1)= cells_initial2; c2_12(1)= cells_initial2; c2_13(1)= cells_initial2; c2_14(1)= cells_initial2; c2_15(1)= cells_initial2; c2_16(1)= cells_initial2; c2_17(1)= cells_initial2; c2_18(1) = cells_initial2; c2_19(1) = cells_initial2; c2_20(1) = cells_initial2;
+c3_1(1)= cells_initial3; c3_2(1)= cells_initial3; c3_3(1)= cells_initial3; c3_4(1)= cells_initial3; c3_5(1)= cells_initial3; c3_6(1)= cells_initial3; c3_7(1)= cells_initial3; c3_8(1)= cells_initial3; c3_9(1)= cells_initial3; c3_10(1)= cells_initial3; c3_11(1)= cells_initial3; c3_12(1)= cells_initial3; c3_13(1)= cells_initial3; c3_14(1)= cells_initial3; c3_15(1)= cells_initial3; c3_16(1)= cells_initial3; c3_17(1)= cells_initial3; c3_18(1) = cells_initial3; c3_19(1) = cells_initial3; c3_20(1) = cells_initial3;
+c4_1(1)= cells_initial4; c4_2(1)= cells_initial4; c4_3(1)= cells_initial4; c4_4(1)= cells_initial4; c4_5(1)= cells_initial4; c4_6(1)= cells_initial4; c4_7(1)= cells_initial4; c4_8(1)= cells_initial4; c4_9(1)= cells_initial4; c4_10(1)= cells_initial4; c4_11(1)= cells_initial4; c4_12(1)= cells_initial4; c4_13(1)= cells_initial4; c4_14(1)= cells_initial4; c4_15(1)= cells_initial4; c4_16(1)= cells_initial4; c4_17(1)= cells_initial4; c4_18(1) = cells_initial4; c4_19(1) = cells_initial4; c4_20(1) = cells_initial4;
+c5_1(1)= cells_initial5; c5_2(1)= cells_initial5; c5_3(1)= cells_initial5; c5_4(1)= cells_initial5; c5_5(1)= cells_initial5; c5_6(1)= cells_initial5; c5_7(1)= cells_initial5; c5_8(1)= cells_initial5; c5_9(1)= cells_initial5; c5_10(1)= cells_initial5; c5_11(1)= cells_initial5; c5_12(1)= cells_initial5; c5_13(1)= cells_initial5; c5_14(1)= cells_initial5; c5_15(1)= cells_initial5; c5_16(1)= cells_initial5; c5_17(1)= cells_initial5; c5_18(1) = cells_initial5; c5_19(1) = cells_initial5; c5_20(1) = cells_initial5;
+c6_1(1)= cells_initial6; c6_2(1)= cells_initial6; c6_3(1)= cells_initial6; c6_4(1)= cells_initial6; c6_5(1)= cells_initial6; c6_6(1)= cells_initial6; c6_7(1)= cells_initial6; c6_8(1)= cells_initial6; c6_9(1)= cells_initial6; c6_10(1)= cells_initial6; c6_11(1)= cells_initial6; c6_12(1)= cells_initial6; c6_13(1)= cells_initial6; c6_14(1)= cells_initial6; c6_15(1)= cells_initial6; c6_16(1)= cells_initial6; c6_17(1)= cells_initial6; c6_18(1) = cells_initial6; c6_19(1) = cells_initial6; c6_20(1) = cells_initial6;
 
 % Distance between discrete points in well liquid levels
 delz1 = zeros(1,2); delz2 = zeros(1,2); delz3 = zeros(1,2); delz4 = zeros(1,2); delz5 = zeros(1,2); delz6 = zeros(1,2);
-delz1(1) = ic.delz1_ic; delz2(1) = ic.delz2_ic; delz3(1) = ic.delz3_ic; delz4(1) = ic.delz4_ic; delz5(1) = ic.delz5_ic; delz6(1) = ic.delz6_ic;
+delz1(1) = (Total_volm/S_w)/19; delz2(1) = (Total_volm/S_w)/19; delz3(1) = (Total_volm/S_w)/19; delz4(1) = (Total_volm/S_w)/19; delz5(1) = (Total_volm/S_w)/19; delz6(1) = (Total_volm/S_w)/19;
+
 
 %% Solving loop for time-dependent oxygen concentration profile in the chamber
 for sq = 1:round(s)
     for j=2:2
-        t(j) = t(1) + dt;
 
         %% Temperature Data
         % Well 1
@@ -1642,13 +1650,6 @@ for sq = 1:round(s)
     c5_1(1) = c5_1(2); c5_2(1) = c5_2(2); c5_3(1) = c5_3(2); c5_4(1) = c5_4(2); c5_5(1) = c5_5(2); c5_6(1) = c5_6(2); c5_7(1) = c5_7(2); c5_8(1) = c5_8(2); c5_9(1) = c5_9(2); c5_10(1) = c5_10(2); c5_11(1) = c5_11(2); c5_12(1) = c5_12(2); c5_13(1) = c5_13(2); c5_14(1) = c5_14(2); c5_15(1) = c5_15(2); c5_16(1) = c5_16(2); c5_17(1) = c5_17(2); c5_18(1) = c5_18(2); c5_19(1) = c5_19(2); c5_20(1) = c5_20(2);
     c6_1(1) = c6_1(2); c6_2(1) = c6_2(2); c6_3(1) = c6_3(2); c6_4(1) = c6_4(2); c6_5(1) = c6_5(2); c6_6(1) = c6_6(2); c6_7(1) = c6_7(2); c6_8(1) = c6_8(2); c6_9(1) = c6_9(2); c6_10(1) = c6_10(2); c6_11(1) = c6_11(2); c6_12(1) = c6_12(2); c6_13(1) = c6_13(2); c6_14(1) = c6_14(2); c6_15(1) = c6_15(2); c6_16(1) = c6_16(2); c6_17(1) = c6_17(2); c6_18(1) = c6_18(2); c6_19(1) = c6_19(2); c6_20(1) = c6_20(2);
     t(1) = t(2);
-    
-    if sq <= round(tdur/dt) && mod(sq,10) == 0
-        counter_o = counter_o + 1;
-        c_o(counter_o) = c3_20(1);
-        t_o(counter_o) = t(1);
-    else
-    end
 end
 % All final conditions as ic for next iteration
 c_ic = c(:,:,:,end); Pw_ic = Pw(:,:,:,end); Vm1_ic = Vm1(end); Vm2_ic = Vm2(end); Vm3_ic = Vm3(end); Vm4_ic = Vm4(end); Vm5_ic = Vm5(end); Vm6_ic = Vm6(end);
@@ -1673,20 +1674,5 @@ ic = struct('c_ic',c_ic, 'Pw_ic', Pw_ic, 'Vm1_ic', Vm1_ic,'Vm2_ic', Vm2_ic, 'Vm3
     'c5_1_ic', c5_1_ic, 'c5_2_ic', c5_2_ic, 'c5_3_ic', c5_3_ic, 'c5_4_ic', c5_4_ic, 'c5_5_ic', c5_5_ic, 'c5_6_ic', c5_6_ic, 'c5_7_ic', c5_7_ic, 'c5_8_ic', c5_8_ic, 'c5_9_ic', c5_9_ic, 'c5_10_ic', c5_10_ic, 'c5_11_ic', c5_11_ic, 'c5_12_ic', c5_12_ic, 'c5_13_ic', c5_13_ic, 'c5_14_ic', c5_14_ic, 'c5_15_ic', c5_15_ic, 'c5_16_ic', c5_16_ic, 'c5_17_ic', c5_17_ic, 'c5_18_ic', c5_18_ic, 'c5_19_ic', c5_19_ic, 'c5_20_ic', c5_20_ic, ...
     'c6_1_ic', c6_1_ic, 'c6_2_ic', c6_2_ic, 'c6_3_ic', c6_3_ic, 'c6_4_ic', c6_4_ic, 'c6_5_ic', c6_5_ic, 'c6_6_ic', c6_6_ic, 'c6_7_ic', c6_7_ic, 'c6_8_ic', c6_8_ic, 'c6_9_ic', c6_9_ic, 'c6_10_ic', c6_10_ic, 'c6_11_ic', c6_11_ic, 'c6_12_ic', c6_12_ic, 'c6_13_ic', c6_13_ic, 'c6_14_ic', c6_14_ic, 'c6_15_ic', c6_15_ic, 'c6_16_ic', c6_16_ic, 'c6_17_ic', c6_17_ic, 'c6_18_ic', c6_18_ic, 'c6_19_ic', c6_19_ic, 'c6_20_ic', c6_20_ic, 'T1_ic', T1_ic);
 
-% Accounting for reminant increase and decrease
-if toggle == 1 % For optimization (objective function evaluation)
-    if O2_dir == 0 % For increasing oxygen segment
-        f(1) = abs(tdur-target_t);
-        f(2) = abs(target-c_o(end)*1e9);
-        f(3) = abs(min(c_o)*1e9-target_prev);
-    elseif O2_dir == 1 % For decreasing oxygen segment 
-        f(1) = abs(tdur-target_t);
-        f(2) = abs(c_o(end)*1e9-target);
-        f(3) = abs(max(c_o)*1e9-target_prev);
-    else
-    end
-elseif toggle == 2 % For initial condition evaluation
-    f = ic;
-else
-end
+f = ic;
 end

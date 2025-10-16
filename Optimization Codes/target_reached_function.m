@@ -1,4 +1,4 @@
-function f = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t)
+function f = target_reached_function(k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,toggle,ic,target,t_vals,f_vals,T_in,target_t,file_path_vel)
 
 %% Temperature data
 % Find time on temperature curve using Well 1
@@ -150,7 +150,7 @@ D1_O2 = DO2(2,2,3); D2_O2 = DO2(2,6,3); D3_O2 = DO2(6,2,3); D4_O2 = DO2(6,6,3); 
 
 %% Flow Profile Calculation
 % Load file with calculated flow splits from ANSYS data
-load("C:\Users\Nida Qayyum\Documents\MATLAB\Flow_data.mat",'x_y_por_l2','x_y_por_l3','x_n_avg_l3_2','x_p_avg_l3_2','x_n_avg','x_p_avg','x_p_avg_l1','x_n_avg_l1','x_p_avg_l3','x_n_avg_l3')
+load(file_path_vel,'x_y_por_l2','x_y_por_l3','x_n_avg_l3_2','x_p_avg_l3_2','x_n_avg','x_p_avg','x_p_avg_l1','x_n_avg_l1','x_p_avg_l3','x_n_avg_l3')
 
 Qin = 450/60; % Total inlet flow to chamber
 Q = zeros(14,9,3);
