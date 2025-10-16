@@ -357,7 +357,7 @@ ke = 5.5e-10; % Michaelis-Menten constant (mol/cm3)
 % Adjustable system parameters
 f0_i = 0.21; % Initial oxygen fraction
 Total_volm = 1.5; % Total liquid volume per well (mL)
-SC = 0.95; % Salinity correction factor (1 for water and 0.95 for Tyrode's solution)
+SC = 1; % Salinity correction factor (1 for water and 0.95 for Tyrode's solution)
 f0_in = 0; % Inlet oxygen fraction
 cO2in = f0_in*P/(R*T_in); % Inlet oxygen concentration
 
@@ -1732,4 +1732,5 @@ for sq = 1:round(s)
    
     V1_end = Vm1(end); V2_end = Vm2(end); V3_end = Vm3(end); V4_end = Vm4(end); V5_end = Vm5(end); V6_end = Vm6(end);
 end
+
 end
