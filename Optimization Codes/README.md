@@ -1,1 +1,3 @@
-
+1. Download Chamber_liquid_parameters_filter_PAPER.m (from Additional Codes folder), x_pars_post_liquid_final.csv (from Additional Codes folder), y_out_post_liquid_final.csv (from Additional Codes folder), and Flow_data.mat (from Model Calibration folder), opt_function_primary.m (Optimization Codes folder), opt_function_secondary.m (Optimization Codes folder), target_reached_function.m (Optimization Codes folder), and Training_Data_Inc_Dec.xlsx (Optimization Codes folder)
+2. Run Chamber_liquid_parameters_filter_PAPER.m to obtain a parameter set
+3. Run Protocol_predicition_PAPER.m 
