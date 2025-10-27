@@ -115,7 +115,7 @@ end
 
 %% Flow Profile Calculation
 % Load file with calculated flow splits from ANSYS data
-file_path = "C:\Users\Nida Qayyum\Documents\MATLAB\Flow_data.mat";
+file_path = 'Enter file path for Flow_data.mat here';
 load(file_path,'x_y_por_l2','x_y_por_l3','x_n_avg_l3_2','x_p_avg_l3_2','x_n_avg','x_p_avg','x_p_avg_l1','x_n_avg_l1','x_p_avg_l3','x_n_avg_l3')
 
 Qin = 450/60; % Total inlet flow to chamber
@@ -733,4 +733,5 @@ TR_p = 0.5*(squeeze(c(2,8,3,:))*R*T(2,8,3)*100/P + squeeze(c(2,9,3,:))*R*T(2,9,3
 BL_p = 0.5*(squeeze(c(13,1,3,:))*R*T(13,1,3)*100/P + squeeze(c(13,2,3,:))*R*T(13,2,3)*100/P);
 TR_10 = TR_p(round(10/dt)-round(td/dt)); TR_60 = TR_p(round(60/dt)-round(td/dt)); TR_90 = TR_p(round(90/dt)-round(td/dt));
 BL_30 = BL_p(round(30/dt)-round(td/dt)); BL_60 = BL_p(round(60/dt)-round(td/dt)); BL_90 = BL_p(round(90/dt)-round(td/dt));
+
 end
