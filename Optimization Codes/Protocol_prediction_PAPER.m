@@ -169,7 +169,13 @@ for i = 1:length(target_c)-1
         target_prev_val = fval(:,3);
 
         % Find solution set from optimization results
-        psol_ind = find(target_prev_val < O2_threshold); % Filter possible solution sets based on oxygen concentration threshold
+        psol_ind = []; % Initialize to enter while loop
+        thresh_counter = 0; % Initialize
+        % Allow loosening of threshold if necessary
+        while double(isempty(psol_ind)) == 1
+            psol_ind = find(target_prev_val < O2_threshold + thresh_counter); % Filter possible solutions based on defined oxygen concentration threshold
+            thresh_counter = thresh_counter + 1;
+        end
         time_psol = time_val(psol_ind);
         time_psol_sort = unique(sort(time_psol)); % Eliminate repeating solution sets
         sol_row = []; % Initialize to enter while loop
@@ -449,7 +455,13 @@ for i = 1:length(target_c)-1
             target_prev_val = fval(:,3);
 
             % Find solution set from optimization results
-            psol_ind = find(target_prev_val < O2_threshold); % Filter possible solutions based on defined oxygen concentration threshold
+            psol_ind = []; % Initialize to enter while loop
+            thresh_counter = 0; % Initialize
+            % Allow loosening of threshold if necessary
+            while double(isempty(psol_ind)) == 1
+                psol_ind = find(target_prev_val < O2_threshold + thresh_counter); % Filter possible solutions based on defined oxygen concentration threshold
+                thresh_counter = thresh_counter + 1;
+            end
             time_psol = time_val(psol_ind);
             time_psol_sort = unique(sort(time_psol)); % Eliminate repeating solutions
             sol_row = []; % Initialize to enter while loop
@@ -894,7 +906,13 @@ for i = 1:length(target_c)-1
                         target_prev_val = fval(:,3);
 
                         % Find solution set from optimization results
-                        psol_ind = find(target_prev_val < O2_threshold); % Filter possible solutions based on defined oxygen concentration threshold
+                        psol_ind = []; % Initialize to enter while loop
+                        thresh_counter = 0; % Initialize 
+                        % target_prev_val may be changed upon changing inlet oxygen fraction --> allow loosening of threshold if necessary
+                        while double(isempty(psol_ind)) == 1
+                            psol_ind = find(target_prev_val < O2_threshold + thresh_counter); % Filter possible solutions based on defined oxygen concentration threshold
+                            thresh_counter = thresh_counter + 1;
+                        end
                         time_psol = time_val(psol_ind);
                         time_psol_sort = unique(sort(time_psol)); % Eliminate repeating solutions
                         sol_row = []; % Initialize to enter while loop
@@ -1320,7 +1338,13 @@ for i = 1:length(target_c)-1
                         target_prev_val = fval(:,3);
 
                         % Find solution set from optimization results
-                        psol_ind = find(target_prev_val < O2_threshold); % Filter possible solutions based on defined oxygen concentration threshold
+                        psol_ind = []; % Initialize to enter while loop
+                        thresh_counter = 0; % Initialize
+                        % target_prev_val may be changed upon changing inlet oxygen fraction --> allow loosening of threshold if necessary
+                        while double(isempty(psol_ind)) == 1
+                            psol_ind = find(target_prev_val < O2_threshold + thresh_counter); % Filter possible solutions based on defined oxygen concentration threshold
+                            thresh_counter = thresh_counter + 1;
+                        end
                         time_psol = time_val(psol_ind);
                         time_psol_sort = unique(sort(time_psol)); % Eliminate repeating solutions
                         sol_row = []; % Initialize to enter while loop
@@ -1714,7 +1738,7 @@ for i = 1:length(target_c)-1
                     sol_dur(i) = time_actual;
                 end
 
-            else % Run duration is within defined range
+            else % Time interval is within defined range
             end
         else % Solution determined from primary method
             disp('Primary method successful')

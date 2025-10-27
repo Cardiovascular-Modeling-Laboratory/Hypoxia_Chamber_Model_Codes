@@ -1675,14 +1675,12 @@ ic = struct('c_ic',c_ic, 'Pw_ic', Pw_ic, 'Vm1_ic', Vm1_ic,'Vm2_ic', Vm2_ic, 'Vm3
 
 % Accounting for reminant increase and decrease
 if toggle == 1 % For optimization (objective function evaluation)
+    f(1) = abs(target_t-tdur);
+    f(2) = abs(target-c_o(end)*1e9);
     if O2_dir == 0 % For increasing oxygen segment
-        f(1) = abs(tdur-target_t);
-        f(2) = abs(target-c_o(end)*1e9);
-        f(3) = abs(min(c_o)*1e9-target_prev);
-    elseif O2_dir == 1 % For decreasing oxygen segment 
-        f(1) = abs(tdur-target_t);
-        f(2) = abs(c_o(end)*1e9-target);
-        f(3) = abs(max(c_o)*1e9-target_prev);
+        f(3) = abs(target_prev-min(c_o)*1e9);
+    elseif O2_dir == 1 % For decreasing oxygen segment
+        f(3) = abs(target_prev-max(c_o)*1e9);
     else
     end
 elseif toggle == 2 % For initial condition evaluation
