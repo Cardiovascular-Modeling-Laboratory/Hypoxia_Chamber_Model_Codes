@@ -1,4 +1,4 @@
-function [V1_end, V2_end, V3_end, V4_end, V5_end, V6_end, c3_20_5, c3_20_10, c3_20_15] = gas_liquid_model_function(T1,k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,position,td)
+function [V1_end, V2_end, V3_end, V4_end, V5_end, V6_end, c3_20_5, c3_20_10, c3_20_15] = gas_liquid_model_function(T1,k1,k2,k3,k4,k5,k6,Inlet_l2,Inlet_l3,position,td,tf,O2_f)
 
 %% Temperature data
 % Find time on temperature curve using Well 1
@@ -1732,5 +1732,4 @@ for sq = 1:round(s)
    
     V1_end = Vm1(end); V2_end = Vm2(end); V3_end = Vm3(end); V4_end = Vm4(end); V5_end = Vm5(end); V6_end = Vm6(end);
 end
-
 end
