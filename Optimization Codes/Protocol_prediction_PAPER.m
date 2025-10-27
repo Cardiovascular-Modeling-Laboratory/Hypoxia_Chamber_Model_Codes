@@ -1,9 +1,18 @@
 %% Load and segment target oxygen pattern
-% Load .mat file with target oxygen pattern
+% Load .mat file with target oxygen pattern (contains CsaO2d_target and t_target)
 [filename_cycle, cycle_path] = ...
     uigetfile('*.mat', 'Select the .mat file with the target oxygen fluctuation pattern',[]);
 file_path = [cycle_path filename_cycle];
 load(file_path)
+
+% Filter signal 
+dt = 0.01; % Approximate time step of data
+windowSize = round(30/dt);
+b = (1/windowSize)*ones(1,windowSize);
+a = 1;
+CsaO2d_target_f = filtfilt(b,a,CsaO2d_target);
+c_t = CsaO2d_target_f;
+t1 = t_target - t_target(1);
 
 % Segment input pattern
 diffc_t = diff(c_t)/(t1(2)-t1(1)); % Pattern derivative
