@@ -373,7 +373,7 @@ ke = 5.5e-10; % Michaelis-Menten constant (mol/cm3)
 protocol = input('Are you running a step change (=0) or IH protocol (=1)?');
 if protocol == 0
     tend = input('Enter total time of run in seconds:');
-    f0_in = input('Enter the inlet oxygen fraction:'); 
+    f0_in = input('Enter the inlet oxygen fraction:');  
 else
     [filename_IH, path_IH] = uigetfile('*.*','Select file with IH protocol');
     data_IH = readtable([path_IH filename_IH]);
@@ -388,11 +388,11 @@ s = round(tend/dt);
 t = zeros(1,s);
 dx = 1; dy = 1; % 2-D element dimensions
 Vw1 = 1; Vw2 = 1; Vw3 = 1; Vw4 = 1; Vw5 = 1; Vw6 = 1; % (=0 for no liquid present in well and =1 for liquid present)
-cells_1 = 0; cells_2 = 0; cells_3 = 1; cells_4 = 0; cells_5 = 0; cells_6 = 0; % (=0 for no cells present in well and =1 for cells present)
+cells_1 = 1; cells_2 = 1; cells_3 = 1; cells_4 = 1; cells_5 = 1; cells_6 = 1; % (=0 for no cells present in well and =1 for cells present)
 
 % Adjustable system parameters
 f0_i = 0.21; % Initial oxygen fraction
-Total_volm = 1.5; % Total liquid volume per well (mL)
+Total_volm = 0.75; % Total liquid volume per well (mL)
 SC = 0.95; % Salinity correction factor (1 for water and 0.95 for Tyrode's solution)
 cO2in = f0_in*P/(R*T_in); % Inlet oxygen concentration
 

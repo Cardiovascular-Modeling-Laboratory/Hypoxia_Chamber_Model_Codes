@@ -106,6 +106,7 @@ T(10:14,1:5,3) = T5; T(10:14,6:9,3) = T6;
 
 T = T + 273; % Temperature conversion from celsius to kelvin 
 T_in = T(1,3,2); % Approximate inlet gas temperature to chamber (sourced from gas tanks)
+
 %% Define initial condition for temperature-dependent parameters
 Temp = [25+273 50+273]; 
 % Diffusion coefficient of oxygen in gas corresponding to Temp
@@ -458,7 +459,7 @@ for i=2:s
                     c(y,x,z,i) = (Q(y,x,z)*c(y,x+1,z,i-1) - D(y,x,z)*(dy*h(y,x,z))*(c(y,x,z,i-1)-c(y,x+1,z,i-1))/dx - Q(y,x,z)*c(y,x,z,i-1) + D(y,x,z)*(dy*h(y,x,z))*(c(y,x-1,z,i-1)-c(y,x,z,i-1))/dx + D(y,x,z)*(dx*dy)*(c(y,x,z-1,i-1)-c(y,x,z,i-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) + D(y,x,z)*(dx*dy)*(c(y,x,z+1,i-1)-c(y,x,z,i-1))/(0.5*(h(y,x,z)+h(y,x,z+1))))*dt/V + c(y,x,z,i-1);
                 elseif x == 3
                     if protocol == 1
-                        c(y,x,z,i) = interp1(tf,O2_f*(P/(R*T_in)),t(i),'next');
+                        c(y,x,z,i) = interp1(tf,O2_f*(P/(R*T_in)),t(i),'next','extrap');
                     else
                         c(y,x,z,i) = cO2in;
                     end
