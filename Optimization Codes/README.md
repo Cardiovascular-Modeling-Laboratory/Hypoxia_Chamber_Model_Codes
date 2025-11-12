@@ -8,7 +8,7 @@
    - target_reached_function.m (Optimization Codes folder)
    - Chamber_initial_condition.m (Optimization Codes folder)
    - Training_Data_Inc_Dec.xlsx (Optimization Codes folder)
-2. Run Chamber_liquid_parameters_filter_PAPER.m to obtain a parameter set
+2. Run Chamber_liquid_parameters_filter_PAPER.m to obtain a parameter set for optimization
 3. Run Protocol_predicition_PAPER.m to run optimization for protocol prediction
 
 NOTES:
