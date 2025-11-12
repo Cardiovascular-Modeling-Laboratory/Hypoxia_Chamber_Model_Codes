@@ -21,3 +21,4 @@ To run gas-liquid phase code with a sample parameter set:
 NOTES:
 - A sample IH protocol (Sample_IH_Protocol.csv) has been provided for IH run testing
 - The codes automatically choose a random filtered parameter set to run the model. This can be adjusted in the first section of both chamber_gas_phase.m and chamber_gas_and_liquid_phase.m
+- Parameters such as starting liquid volume, cell density, cellular metabolic coefficients, etc. can be adjusted within the codes
