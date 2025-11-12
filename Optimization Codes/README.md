@@ -13,4 +13,5 @@
 
 NOTES:
 - The optimization code automatically chooses a random filtered parameter set to run the model. This can be adjusted in the first section of both Protocol_prediction_PAPER.m
-- The file target_pattern_PAPER.m was used and is provided as a sample to run the optimization code 
+- The file target_pattern_PAPER.m was used and is provided as a sample to run the optimization code
+- Parameters such as starting liquid volume, cell density, cellular metabolic coefficients, etc. can be adjusted within the codes
