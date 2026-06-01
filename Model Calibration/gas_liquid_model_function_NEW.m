@@ -175,7 +175,8 @@ D1_O2 = DO2(2,2,2); D2_O2 = DO2(2,6,2); D3_O2 = DO2(6,2,2); D4_O2 = DO2(6,6,2); 
 
 %% Flow Profile Calculation
 % Load file with calculated flow splits from ANSYS data
-load("C:\Users\Nida Qayyum\Documents\MATLAB\Chamber Model\Paper\Flow_data.mat",'x_y_por_l2','x_y_por_l3','x_n_avg_l3_2','x_p_avg_l3_2','x_n_avg','x_p_avg','x_p_avg_l1','x_n_avg_l1','x_p_avg_l3','x_n_avg_l3')
+file_path = 'Enter file path for Flow_data.mat here';
+load(file_path,'x_y_por_l2','x_y_por_l3','x_n_avg_l3_2','x_p_avg_l3_2','x_n_avg','x_p_avg','x_p_avg_l1','x_n_avg_l1','x_p_avg_l3','x_n_avg_l3')
 
 Qin = 450/60; % Total inlet flow to chamber
 Q = zeros(14,9,3);
