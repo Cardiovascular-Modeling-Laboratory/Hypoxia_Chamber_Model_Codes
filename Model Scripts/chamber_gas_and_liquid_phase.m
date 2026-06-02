@@ -406,8 +406,8 @@ else
      data_IH_double = table2array(data_IH);
      tf = data_IH_double(:,1);
      O2_f = data_IH_double(:,2);
-    tend = tf(end);
-    f0_in = O2_f(1);
+     tend = tf(end);
+     f0_in = O2_f(1);
 end
 dt = 0.01;
 s = round(tend/dt);
