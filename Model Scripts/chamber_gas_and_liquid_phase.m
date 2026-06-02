@@ -396,20 +396,19 @@ ke = 5.5e-10; % Michaelis-Menten constant (mol/cm3)
 
 
 % Solving parameters
-protocol = 1;
-% protocol = input('Are you running a step change (=0) or IH protocol (=1)?');
-% if protocol == 0
-%     tend = input('Enter total time of run in seconds:');
-%     f0_in = input('Enter the inlet oxygen fraction:');
-% else
-%     [filename_IH, path_IH] = uigetfile('*.*','Select file with IH protocol');
-%     data_IH = readtable([path_IH filename_IH]);
-%     data_IH_double = table2array(data_IH);
-%     tf = data_IH_double(:,1);
-%     O2_f = data_IH_double(:,2);
+protocol = input('Are you running a step change (=0) or IH protocol (=1)?');
+if protocol == 0
+     tend = input('Enter total time of run in seconds:');
+     f0_in = input('Enter the inlet oxygen fraction:');
+else
+     [filename_IH, path_IH] = uigetfile('*.*','Select file with IH protocol');
+     data_IH = readtable([path_IH filename_IH]);
+     data_IH_double = table2array(data_IH);
+     tf = data_IH_double(:,1);
+     O2_f = data_IH_double(:,2);
     tend = tf(end);
     f0_in = O2_f(1);
-% end
+end
 dt = 0.01;
 s = round(tend/dt);
 t = zeros(1,s);
