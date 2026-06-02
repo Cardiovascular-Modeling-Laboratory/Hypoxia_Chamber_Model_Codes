@@ -90,23 +90,45 @@ else
     L1 = 33.5;
 end
 
-% Gas temperatures
+% Temperature difference between lid and Layer 3
+T_diff = zeros(14,9); % Initialize
+T_diff(1:4,1:5) = -0.6 ; % From experimental data
+T_diff(1:4,6:9) = -0.5;
+T_diff(5:9,1:5) = -1;
+T_diff(5:9,6:9) = -1.1;
+T_diff(10:14,1:5) = -0.7;
+T_diff(10:14,6:9) = -0.8;
+if t_m1<1800 % Progression to equilibrium (no temperature difference at experimental t = 0)
+    T_diff(1:4,1:5) = (T_diff(1:4,1:5)/1800)*t_m1;
+    T_diff(1:4,6:9) = (T_diff(1:4,6:9)/1800)*t_m1;
+    T_diff(5:9,1:5) = (T_diff(5:9,1:5)/1800)*t_m1;
+    T_diff(5:9,6:9) = (T_diff(5:9,6:9)/1800)*t_m1;
+    T_diff(10:14,1:5) = (T_diff(10:14,1:5)/1800)*t_m1;
+    T_diff(10:14,6:9) = (T_diff(10:14,6:9)/1800)*t_m1;
+else % Equilibrium reached after 1800s based on measured data
+end
+
+% Gas and lid temperatures
 T = zeros(14,9,3);
 T(:,:,1) = L1;
 T(:,:,2) = L2;
 T(1:4,1:5,3) = T1; T(1:4,6:9,3) = T2;
 T(5:9,1:5,3) = T3; T(5:9,6:9,3) = T4;
 T(10:14,1:5,3) = T5; T(10:14,6:9,3) = T6;
-T = T + 273; % Temperature conversion from celsius to kelvin
+T_lid = T(:,:,3) + T_diff;
 
-% Liquid temperatures inside wells (determined from regression of measured gas vs. liquid temeperatures)
+T = T + 273; % Temperature conversion from celsius to kelvin
+T_lid = T_lid + 273;
+
+% Liquid temperatures inside wells (determined from regression of measured gas (Layer 3) vs. liquid (in wells) temeperatures)
 T_w = zeros(14,9,3);
 T_w(:,:,1) = 0; % No liquid in Layer 1
-T_w(:,:,2) = 0; % No liquid in Layer 2 (water in water bath not modeled)
-T_w(2:4,2:4,3) = 1.1*T1 - 2.11; T_w(2:4,6:8,3) = 1.1*T2 - 2.11;
-T_w(6:8,2:4,3) = 1.1*T3 - 2.11; T_w(6:8,6:8,3) = 1.1*T4 - 2.11;
-T_w(11:13,2:4,3) = 1.1*T5 - 2.11; T_w(11:13,6:8,3) = 1.1*T6 - 2.11;
-T_w = T_w + 273; %temperature conversion from celsius to kelvin
+T_w(:,:,2) = 0; % Initialize
+T_w(2:4,2:4,2) = 1.1*T1 - 2.11; T_w(2:4,6:8,2) = 1.1*T2 - 2.11;
+T_w(6:8,2:4,2) = 1.1*T3 - 2.11; T_w(6:8,6:8,2) = 1.1*T4 - 2.11;
+T_w(11:13,2:4,2) = 1.1*T5 - 2.11; T_w(11:13,6:8,2) = 1.1*T6 - 2.11;
+T_w(:,:,3) = 0; % No liquid in Layer 3
+T_w = T_w + 273; %temperature conversion from celsius to kelvin 
 
 %% Define initial condition for temperature-dependent parameters
 Temp = [25+273 50+273];
@@ -128,7 +150,7 @@ Temp_sol = [25+273 35+273];
 sol_range = [259 218]; %umol/kg (Source: The solubility of oxygen in the major sea salts and their mixtures at 25°C)
 Beta_O2_range = [sol_range(1)*1e-9/(0.21*(760-interp1(Temp,Psat_range,Temp_sol(1),'linear','extrap'))) sol_range(2)*1e-9/(0.21*(760-interp1(Temp,Psat_range,Temp_sol(2),'linear','extrap')))]; %units are mol/mL mmHg
 
-D = zeros(14,9,3); Psat = zeros(14,9,3); Dw = zeros(14,9,3); DO2 = zeros(14,9,3); Beta_O2 = zeros(14,9,3);
+D = zeros(14,9,3); Psat = zeros(14,9,3); Dw = zeros(14,9,3); DO2 = zeros(14,9,3); Beta_O2 = zeros(14,9,3); Psat_cond = zeros(14,9,3);
 D_int = griddedInterpolant(Temp,D_range,'linear');
 Psat_int = griddedInterpolant(Temp,Psat_range,'linear');
 Dw_int = griddedInterpolant(Temp,Dw_range,'linear');
@@ -139,14 +161,25 @@ for z=1:3
     for y=1:14
         for x=1:9
             D(y,x,z) = interp1(Temp,D_range,T(y,x,z),'linear','extrap'); % Diffusion of oxygen in gas phase
-            Psat(y,x,z) = interp1(Temp,Psat_range,T_w(y,x,z),'linear','extrap'); % Saturation pressure of water
+            if T_w(y,x,z) == 273 % No liquid present
+                Psat(y,x,z) = interp1(Temp,Psat_range,T(y,x,z),'linear','extrap'); % Use gas temperature for saturation pressure
+            else
+                Psat(y,x,z) = interp1(Temp,Psat_range,T_w(y,x,z),'linear','extrap'); % Use liquid temperature for saturation pressure of water at surface
+            end
             Dw(y,x,z) = interp1(Temp,Dw_range,T(y,x,z),'linear','extrap'); % Diffusion of water vapor in gas phase
             DO2(y,x,z) = interp1(Temp_DO2,DO2_range,T_w(y,x,z),'linear','extrap'); % Diffusion of oxygen in water
             Beta_O2(y,x,z) = interp1(Temp_sol,Beta_O2_range,T_w(y,x,z),'linear','extrap'); % Solubility of oxygen in water
         end
     end
 end
-D1_O2 = DO2(2,2,3); D2_O2 = DO2(2,6,3); D3_O2 = DO2(6,2,3); D4_O2 = DO2(6,6,3); D5_O2 = DO2(11,2,3); D6_O2 = DO2(11,6,3);
+
+z = 3;
+for y=1:14
+    for x=1:9
+        Psat_cond(y,x,z) = interp1(Temp,Psat_range,T_lid(y,x,1),'linear','extrap'); % Use lid temperature for saturation pressure of water vapor for condensation
+    end
+end
+D1_O2 = DO2(2,2,2); D2_O2 = DO2(2,6,2); D3_O2 = DO2(6,2,2); D4_O2 = DO2(6,6,2); D5_O2 = DO2(11,2,2); D6_O2 = DO2(11,6,2);
 
 %% Flow Profile Calculation
 % Load file with calculated flow splits from ANSYS data
@@ -425,7 +458,7 @@ for sq = 1:round(s)
             T(1:4,1:5,3) = 25.5;
         end
 
-        T_w(2:4,2:4,3) = 1.1*T(2,2,3) - 2.11;
+        T_w(2:4,2:4,2) = 1.1*T(2,2,3) - 2.11;
 
         % Well 2
         if t_curve>=0 && t_curve<1800
@@ -438,7 +471,7 @@ for sq = 1:round(s)
             T(1:4,6:9,3) = 26.2;
         end
 
-        T_w(2:4,6:8,3) = 1.1*T(2,6,3) - 2.11;
+        T_w(2:4,6:8,2) = 1.1*T(2,6,3) - 2.11;
 
         % Well 3
         if t_curve>=0 && t_curve<1800
@@ -451,7 +484,7 @@ for sq = 1:round(s)
             T(5:9,1:5,3) = 30.4;
         end
 
-        T_w(6:8,2:4,3) = 1.1*T(6,2,3) - 2.11;
+        T_w(6:8,2:4,2) = 1.1*T(6,2,3) - 2.11;
 
         % Well 4
         if t_curve>=0 && t_curve<1800
@@ -462,7 +495,7 @@ for sq = 1:round(s)
             T(5:9,6:9,3) = 31.3;
         end
 
-        T_w(6:8,6:8,3) = 1.1*T(6,6,3) - 2.11;
+        T_w(6:8,6:8,2) = 1.1*T(6,6,3) - 2.11;
 
         % Well 5
         if t_curve>=0 && t_curve<1800
@@ -475,7 +508,7 @@ for sq = 1:round(s)
             T(10:14,1:5,3) = 31.3;
         end
 
-        T_w(11:13,2:4,3) = 1.1*T(11,2,3) - 2.11;
+        T_w(11:13,2:4,2) = 1.1*T(11,2,3) - 2.11;
 
         % Well 6
         if t_curve>=0 && t_curve<1800
@@ -488,7 +521,7 @@ for sq = 1:round(s)
             T(10:14,6:9,3) = 31.2;
         end
 
-        T_w(11:13,6:8,3) = 1.1*T(11,6,3) - 2.11;
+        T_w(11:13,6:8,2) = 1.1*T(11,6,3) - 2.11;
 
         % Layer 2
         if t_curve>=0 && t_curve<1800
@@ -512,28 +545,50 @@ for sq = 1:round(s)
             T(:,:,1) = 33.5;
         end
 
-        T = T + 273; T_w(:,:,3) = T_w(:,:,3) + 273;
+       % Lid temperatures
+        % Temperature difference between lid and Layer 3
+        T_diff(1:4,1:5) = -0.6 ; % From experimental data
+        T_diff(1:4,6:9) = -0.5;
+        T_diff(5:9,1:5) = -1;
+        T_diff(5:9,6:9) = -1.1;
+        T_diff(10:14,1:5) = -0.7;
+        T_diff(10:14,6:9) = -0.8;
+        if t_curve<1800 % Progression to equilibrium (no temperature difference at experimental t = 0)
+            T_diff(1:4,1:5) = (T_diff(1:4,1:5)/1800)*t_curve; 
+            T_diff(1:4,6:9) = (T_diff(1:4,6:9)/1800)*t_curve;
+            T_diff(5:9,1:5) = (T_diff(5:9,1:5)/1800)*t_curve;
+            T_diff(5:9,6:9) = (T_diff(5:9,6:9)/1800)*t_curve;
+            T_diff(10:14,1:5) = (T_diff(10:14,1:5)/1800)*t_curve;
+            T_diff(10:14,6:9) = (T_diff(10:14,6:9)/1800)*t_curve;
+        else % Equilibrium reached after 1800s based on measured data
+        end
+        T_lid = T(:,:,3) + T_diff;
+        T = T + 273; T_w(:,:,2) = T_w(:,:,2) + 273; T_lid = T_lid + 273;
 
         %% Temperature-dependent parameter values
-        D1 = D_int(T(2,2,3)); Psat1 = Psat_int(T_w(2,2,3)); Dw1 = Dw_int(T(2,2,3)); DO21 = DO2_int(T_w(2,2,3)); Beta_O21 = Beta_int(T_w(2,2,3));
-        D(1:4,1:5,3) = D1;  Psat(1:4,1:5,3) = Psat1;  Dw(1:4,1:5,3) = Dw1;  DO2(1:4,1:5,3) = DO21;  Beta_O2(1:4,1:5,3) = Beta_O21;
+        D1 = D_int(T(2,2,3)); Psat1 = Psat_int(T_w(2,2,2)); Dw1 = Dw_int(T(2,2,3)); DO21 = DO2_int(T_w(2,2,2)); Beta_O21 = Beta_int(T_w(2,2,2)); Psat_cond1 = Psat_int(T_lid(2,2,1));
+        D(1:4,1:5,3) = D1;  Psat(2:4,2:4,2) = Psat1;  Dw(1:4,1:5,3) = Dw1;  DO2(2:4,2:4,2) = DO21;  Beta_O2(2:4,2:4,2) = Beta_O21; Psat_cond(1:4,1:5,3) = Psat_cond1;
 
-        D2 = D_int(T(2,6,3)); Psat2 = Psat_int(T_w(2,6,3)); Dw2 = Dw_int(T(2,6,3)); DO22 = DO2_int(T_w(2,6,3)); Beta_O22 = Beta_int(T_w(2,6,3));
-        D(1:4,6:9,3) = D2;  Psat(1:4,6:9,3) = Psat2;  Dw(1:4,6:9,3) = Dw2;  DO2(1:4,6:9,3) = DO22;  Beta_O2(1:4,6:9,3) = Beta_O22;
+        D2 = D_int(T(2,6,3)); Psat2 = Psat_int(T_w(2,6,2)); Dw2 = Dw_int(T(2,6,3)); DO22 = DO2_int(T_w(2,6,2)); Beta_O22 = Beta_int(T_w(2,6,2)); Psat_cond2 = Psat_int(T_lid(2,6,1));
+        D(1:4,6:9,3) = D2;  Psat(2:4,6:8,2) = Psat2;  Dw(1:4,6:9,3) = Dw2;  DO2(2:4,6:8,2) = DO22;  Beta_O2(2:4,6:8,2) = Beta_O22; Psat_cond(1:4,6:9,3) = Psat_cond2;
 
-        D3 = D_int(T(6,2,3)); Psat3 = Psat_int(T_w(6,2,3)); Dw3 = Dw_int(T(6,2,3)); DO23 = DO2_int(T_w(6,2,3)); Beta_O23 = Beta_int(T_w(6,2,3));
-        D(5:9,1:5,3) = D3;  Psat(5:9,1:5,3) = Psat3;  Dw(5:9,1:5,3) = Dw3;  DO2(5:9,1:5,3) = DO23;  Beta_O2(5:9,1:5,3) = Beta_O23;
+        D3 = D_int(T(6,2,3)); Psat3 = Psat_int(T_w(6,2,2)); Dw3 = Dw_int(T(6,2,3)); DO23 = DO2_int(T_w(6,2,2)); Beta_O23 = Beta_int(T_w(6,2,2)); Psat_cond3 = Psat_int(T_lid(6,2,1));
+        D(5:9,1:5,3) = D3;  Psat(6:8,2:4,2) = Psat3;  Dw(5:9,1:5,3) = Dw3;  DO2(6:8,2:4,2) = DO23;  Beta_O2(6:8,2:4,2) = Beta_O23; Psat_cond(5:9,1:5,3) = Psat_cond3;
 
-        D4 = D_int(T(6,6,3)); Psat4 = Psat_int(T_w(6,6,3)); Dw4 = Dw_int(T(6,6,3)); DO24 = DO2_int(T_w(6,6,3)); Beta_O24 = Beta_int(T_w(6,6,3));
-        D(5:9,6:9,3) = D4;  Psat(5:9,6:9,3) = Psat4;  Dw(5:9,6:9,3) = Dw4;  DO2(5:9,6:9,3) = DO24;  Beta_O2(5:9,6:9,3) = Beta_O24;
+        D4 = D_int(T(6,6,3)); Psat4 = Psat_int(T_w(6,6,2)); Dw4 = Dw_int(T(6,6,3)); DO24 = DO2_int(T_w(6,6,2)); Beta_O24 = Beta_int(T_w(6,6,2)); Psat_cond4 = Psat_int(T_lid(6,6,1));
+        D(5:9,6:9,3) = D4;  Psat(6:8,6:8,2) = Psat4;  Dw(5:9,6:9,3) = Dw4;  DO2(6:8,6:8,2) = DO24;  Beta_O2(6:8,6:8,2) = Beta_O24; Psat_cond(5:9,6:9,3) = Psat_cond4;
 
-        D5 = D_int(T(11,2,3)); Psat5 = Psat_int(T_w(11,2,3)); Dw5 = Dw_int(T(11,2,3)); DO25 = DO2_int(T_w(11,2,3)); Beta_O25 = Beta_int(T_w(11,2,3));
-        D(10:14,1:5,3) = D5;  Psat(10:14,1:5,3) = Psat5;  Dw(10:14,1:5,3) = Dw5;  DO2(10:14,1:5,3) = DO25;  Beta_O2(10:14,1:5,3) = Beta_O25;
+        D5 = D_int(T(11,2,3)); Psat5 = Psat_int(T_w(11,2,2)); Dw5 = Dw_int(T(11,2,3)); DO25 = DO2_int(T_w(11,2,2)); Beta_O25 = Beta_int(T_w(11,2,2)); Psat_cond5 = Psat_int(T_lid(11,2,1));
+        D(10:14,1:5,3) = D5;  Psat(11:13,2:4,2) = Psat5;  Dw(10:14,1:5,3) = Dw5;  DO2(11:13,2:4,2) = DO25;  Beta_O2(11:13,2:4,2) = Beta_O25; Psat_cond(10:14,1:5,3) = Psat_cond5;
 
-        D6 = D_int(T(11,6,3)); Psat6 = Psat_int(T_w(11,6,3)); Dw6 = Dw_int(T(11,6,3)); DO26 = DO2_int(T_w(11,6,3)); Beta_O26 = Beta_int(T_w(11,6,3));
-        D(10:14,6:9,3) = D6;  Psat(10:14,6:9,3) = Psat6;  Dw(10:14,6:9,3) = Dw6;  DO2(10:14,6:9,3) = DO26;  Beta_O2(10:14,6:9,3) = Beta_O26;
+        D6 = D_int(T(11,6,3)); Psat6 = Psat_int(T_w(11,6,2)); Dw6 = Dw_int(T(11,6,3)); DO26 = DO2_int(T_w(11,6,2)); Beta_O26 = Beta_int(T_w(11,6,2)); Psat_cond6 = Psat_int(T_lid(11,6,1));
+        D(10:14,6:9,3) = D6;  Psat(11:13,6:8,2) = Psat6;  Dw(10:14,6:9,3) = Dw6;  DO2(11:13,6:8,2) = DO26;  Beta_O2(11:13,6:8,2) = Beta_O26; Psat_cond(10:14,6:9,3) = Psat_cond6;
 
-        D1_O2 = DO2(2,2,3); D2_O2 = DO2(2,6,3); D3_O2 = DO2(6,2,3); D4_O2 = DO2(6,6,3); D5_O2 = DO2(11,2,3); D6_O2 = DO2(11,6,3);
+        D1_O2 = DO2(2,2,2); D2_O2 = DO2(2,6,2); D3_O2 = DO2(6,2,2); D4_O2 = DO2(6,6,2); D5_O2 = DO2(11,2,2); D6_O2 = DO2(11,6,2);
+
+        % Layer 1 and 2 diffusion coefficients
+        DL1 = D_int(T(1,1,1)); D(:,:,1) = DL1;  DwL1 = Dw_int(T(1,1,1)); Dw(:,:,1) = DwL1; 
+        DL2 = D_int(T(1,1,2)); D(:,:,2) = DL2;  DwL2 = Dw_int(T(1,1,2)); Dw(:,:,2) = DwL2; 
 
         %% WATER VAPOR PRESSURE AND EVAPORATION MODEL
 
@@ -726,364 +781,440 @@ for sq = 1:round(s)
         for y=1:14
             if y == 1
                 for x=1:9
+                    if x < 6
+                        k = k1;
+                    else
+                        k = k2;
+                    end
+                    cond = k*(dx*dy)*min(0,Psat_cond(y,x,z) - Pw(y,x,z,j-1));
                     if x == 1
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 2
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 3
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x,z-1,j-1) - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x,z-1,j-1) - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x>3 && x<9
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     else
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                     end
                 end
             elseif y == 2
                 for x=1:9
+                    if x < 6
+                        k = k1;
+                    else
+                        k = k2;
+                    end
+                    cond = k*(dx*dy)*min(0,Psat_cond(y,x,z) - Pw(y,x,z,j-1));
                     if x == 1
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 2
                         V = dx*dy*h(y,x,z);
                         if Vw1 == 1
                             if Vm1(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm1(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw1 = k1;
+                                Evap = kw1*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*(abs(x_n_avg_l3_2)/(abs(x_n_avg_l3_2) + abs(x_p_avg_l3_2)))*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*(abs(x_n_avg_l3_2)/(abs(x_n_avg_l3_2) + abs(x_p_avg_l3_2)))*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*(abs(x_n_avg_l3_2)/(abs(x_n_avg_l3_2) + abs(x_p_avg_l3_2)))*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*(abs(x_n_avg_l3_2)/(abs(x_n_avg_l3_2) + abs(x_p_avg_l3_2)))*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 3
                         V = dx*dy*h(y,x,z);
                         if Vw1 == 1
                             if Vm1(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm1(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw1 = k1;
+                                Evap = kw1*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 4
                         V = dx*dy*h(y,x,z);
-                        if Vw1 ==1
+                        if Vw1 == 1
                             if Vm1(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm1(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw1 = k1;
+                                Evap = kw1*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*(abs(x_p_avg_l3_2)/(abs(x_n_avg_l3_2) + abs(x_p_avg_l3_2)))*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*(abs(x_p_avg_l3_2)/(abs(x_n_avg_l3_2) + abs(x_p_avg_l3_2)))*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*(abs(x_p_avg_l3_2)/(abs(x_n_avg_l3_2) + abs(x_p_avg_l3_2)))*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*(abs(x_p_avg_l3_2)/(abs(x_n_avg_l3_2) + abs(x_p_avg_l3_2)))*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 5
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x>5 && x<9
                         V = dx*dy*h(y,x,z);
                         if Vw2 == 1
                             if Vm2(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm2(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw2 = k2;
+                                Evap = kw2*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     else
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Pw(y,x,z-1,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                     end
                 end
             elseif y == 3
                 for x=1:9
+                    if x < 6
+                        k = k1;
+                    else
+                        k = k2;
+                    end
+                    cond = k*(dx*dy)*min(0,Psat_cond(y,x,z) - Pw(y,x,z,j-1));
                     if x == 1
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x>1 && x<5
                         V = dx*dy*h(y,x,z);
                         if Vw1 == 1
                             if Vm1(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm1(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw1 = k1;
+                                Evap = kw1*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 5
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 6
                         V = dx*dy*h(y,x,z);
                         if Vw2 == 1
                             if Vm2(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm2(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw2 = k2;
+                                Evap = kw2*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 7
                         V = dx*dy*h(y,x,z);
                         if Vw2 == 1
                             if Vm2(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm2(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw2 = k2;
+                                Evap = kw2*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 8
                         V = dx*dy*h(y,x,z);
                         if Vw2 == 1
                             if Vm2(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm2(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw2 = k2;
+                                Evap = kw2*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     else
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     end
                 end
             elseif y == 4
                 for x=1:9
+                    if x < 6
+                        k = k1;
+                    else
+                        k = k2;
+                    end
+                    cond = k*(dx*dy)*min(0,Psat_cond(y,x,z) - Pw(y,x,z,j-1));
                     if x == 1
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x>1 && x<5
                         V = dx*dy*h(y,x,z);
                         if Vw1 == 1
                             if Vm1(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm1(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw1 = k1;
+                                Evap = kw1*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 5
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 6
                         V = dx*dy*h(y,x,z);
                         if Vw2 == 1
                             if Vm2(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm2(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw2 = k2;
+                                Evap = kw2*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 7
                         V = dx*dy*h(y,x,z);
                         if Vw2 == 1
                             if Vm2(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm2(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw2 = k2;
+                                Evap = kw2*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 8
                         V = dx*dy*h(y,x,z);
                         if Vw2 == 1
                             if Vm2(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm2(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw2 = k2;
+                                Evap = kw2*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     else
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     end
                 end
             elseif y>5 && y<9
                 for x=1:9
+                    if x < 6
+                        k = k3;
+                    else
+                        k = k4;
+                    end
+                    cond = k*(dx*dy)*min(0,Psat_cond(y,x,z) - Pw(y,x,z,j-1));
                     if x == 1
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x>1 && x<5
                         V = dx*dy*h(y,x,z);
                         if Vw3 == 1
                             if Vm3(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm3(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw3 = k3;
+                                Evap = kw3*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 5
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 6
                         V = dx*dy*h(y,x,z);
                         if Vw4 == 1
                             if Vm4(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm4(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw4 = k4;
+                                Evap = kw4*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 7
                         V = dx*dy*h(y,x,z);
                         if Vw4 == 1
                             if Vm4(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm4(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw4 = k4;
+                                Evap = kw4*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 8
                         V = dx*dy*h(y,x,z);
                         if Vw4 == 1
                             if Vm4(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm4(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw4 = k4;
+                                Evap = kw4*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     else
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     end
                 end
             elseif y>10 && y<14
                 for x=1:9
+                    if x < 6
+                        k = k5;
+                    else
+                        k = k6;
+                    end
+                    cond = k*(dx*dy)*min(0,Psat_cond(y,x,z) - Pw(y,x,z,j-1));
                     if x == 1
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x>1 && x<5
                         V = dx*dy*h(y,x,z);
                         if Vw5 == 1
                             if Vm5(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm5(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw5 = k5;
+                                Evap = kw5*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 5
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 6
                         V = dx*dy*h(y,x,z);
                         if Vw6 == 1
                             if Vm6(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm6(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw6 = k6;
+                                Evap = kw6*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 7
                         V = dx*dy*h(y,x,z);
                         if Vw6 == 1
                             if Vm6(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm6(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw6 = k6;
+                                Evap = kw6*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     elseif x == 8
                         V = dx*dy*h(y,x,z);
                         if Vw6 == 1
                             if Vm6(j-1)>0
-                                Evap = Dw(y,x,z)*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,z))/((P_h - Vm6(j-1)/S_w) + 0.5*h(y,x,z));
+                                kw6 = k6;
+                                Evap = kw6*(dx*dy)*(Pw(y,x,z,j-1)-Psat(y,x,2));
                             else
                                 Evap = 0;
                             end
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Evap - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         else
-                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                            Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                         end
                     else
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     end
                 end
             elseif y == 5 || y == 9 || y == 10
                 for x=1:9
+                    if y == 5 || y == 9
+                        if x < 6
+                            k = k3;
+                        else
+                            k = k4;
+                        end
+                    else
+                        if x < 6
+                            k = k5;
+                        else
+                            k = k6;
+                        end
+                    end
+                    cond = k*(dx*dy)*min(0,Psat_cond(y,x,z) - Pw(y,x,z,j-1));
                     if x == 1
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x>1 && x<7
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 7
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*x_y_por_l3(y,x-1)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 8
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*x_y_por_l3(y,x+1)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     else
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y+1,x,z,j-1)-Pw(y,x,z,j-1))/dy + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     end
                 end
             else
                 for x=1:9
+                    if x < 6
+                        k = k5;
+                    else
+                        k = k6;
+                    end
+                    cond = k*(dx*dy)*min(0,Psat_cond(y,x,z) - Pw(y,x,z,j-1));
                     if x == 1
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x>1 && x<7
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x+1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 7
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*dy)*(Pw(y,x,z-1,j-1)-Pw(y,x,z,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))))*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x-1,z)*Pw(y,x-1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x-1,z,j-1))/dx + Q(y,x+1,z)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dx*dy)*(Pw(y,x,z-1,j-1)-Pw(y,x,z,j-1))/(0.5*(h(y,x,z)+h(y,x,z-1))) + cond)*(dt/V) + Pw(y,x,z,j-1);
                     elseif x == 8
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y-1,x,z)*(1-x_y_por_l3(y-1,x))*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy + Q(y,x+1,z)*Pw(y,x+1,z,j-1) - Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y,x+1,z,j-1))/dx - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     else
                         V = dx*dy*h(y,x,z);
-                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx)*(dt/V) + Pw(y,x,z,j-1);
+                        Pw(y,x,z,j) = (Q(y,x,z)*Pw(y-1,x,z,j-1) - Dw(y,x,z)*(dx*h(y,x,z))*(Pw(y,x,z,j-1)-Pw(y-1,x,z,j-1))/dy - Q(y,x,z)*Pw(y,x,z,j-1) + Dw(y,x,z)*(dy*h(y,x,z))*(Pw(y,x-1,z,j-1)-Pw(y,x,z,j-1))/dx + cond)*(dt/V) + Pw(y,x,z,j-1);
                     end
                 end
             end
@@ -1099,43 +1230,67 @@ for sq = 1:round(s)
 
         % Liquid volume calculation for wells
         if Vw1 == 1
-            kc = k1*(1 - (P_h - Vm1(j-1)/S_w)/P_h);
-            Vm1(j) = -kc*Mw*S_w*dt*(Psat(2,2,3)-Pw1_avg(j))/(rho*R*T(2,2,3)) + Vm1(j-1);
+            kc = k1;
+            Vm1(j) = -kc*Mw*S_w*dt*(Psat(2,2,2)-Pw1_avg(j-1))/(rho*R*T(2,2,3)) + Vm1(j-1);
+            if Vm1(j) < 0
+               Vm1(j) = 0;
+            else
+            end
         else
             Vm1(j) = 0;
         end
 
         if Vw2 == 1
-            kc = k2*(1 - (P_h - Vm2(j-1)/S_w)/P_h);
-            Vm2(j) = -kc*Mw*S_w*dt*(Psat(2,6,3)-Pw2_avg(j))/(rho*R*T(2,6,3)) + Vm2(j-1);
+            kc = k2;
+            Vm2(j) = -kc*Mw*S_w*dt*(Psat(2,6,2)-Pw2_avg(j-1))/(rho*R*T(2,6,3)) + Vm2(j-1);
+            if Vm2(j) < 0
+               Vm2(j) = 0;
+            else
+            end
         else
             Vm2(j) = 0;
         end
 
         if Vw3 == 1
-            kc = k3*(1 - (P_h - Vm3(j-1)/S_w)/P_h);
-            Vm3(j) = -kc*Mw*S_w*dt*(Psat(6,2,3)-Pw3_avg(j))/(rho*R*T(6,2,3)) + Vm3(j-1);
+            kc = k3;
+            Vm3(j) = -kc*Mw*S_w*dt*(Psat(6,2,2)-Pw3_avg(j-1))/(rho*R*T(6,2,3)) + Vm3(j-1);
+            if Vm3(j) < 0
+               Vm3(j) = 0;
+            else
+            end
         else
             Vm3(j) = 0;
         end
 
         if Vw4 == 1
-            kc = k4*(1 - (P_h - Vm4(j-1)/S_w)/P_h);
-            Vm4(j) = -kc*Mw*S_w*dt*(Psat(6,6,3)-Pw4_avg(j))/(rho*R*T(6,6,3)) + Vm4(j-1);
+            kc = k4;
+            Vm4(j) = -kc*Mw*S_w*dt*(Psat(6,6,2)-Pw4_avg(j-1))/(rho*R*T(6,6,3)) + Vm4(j-1);
+            if Vm4(j) < 0
+               Vm4(j) = 0;
+            else
+            end
         else
             Vm4(j) = 0;
         end
 
         if Vw5 == 1
-            kc = k5*(1 - (P_h - Vm5(j-1)/S_w)/P_h);
-            Vm5(j) = -kc*Mw*S_w*dt*(Psat(11,2,3)-Pw5_avg(j))/(rho*R*T(11,2,3)) + Vm5(j-1);
+            kc = k5;
+            Vm5(j) = -kc*Mw*S_w*dt*(Psat(11,2,2)-Pw5_avg(j-1))/(rho*R*T(11,2,3)) + Vm5(j-1);
+            if Vm5(j) < 0
+               Vm5(j) = 0;
+            else
+            end
         else
             Vm5(j) = 0;
         end
 
         if Vw6 == 1
-            kc = k6*(1 - (P_h - Vm6(j-1)/S_w)/P_h);
-            Vm6(j) = -kc*Mw*S_w*dt*(Psat(11,6,3)-Pw6_avg(j))/(rho*R*T(11,6,3)) + Vm6(j-1);
+            kc = k6;
+            Vm6(j) = -kc*Mw*S_w*dt*(Psat(11,6,2)-Pw6_avg(j-1))/(rho*R*T(11,6,3)) + Vm6(j-1);
+            if Vm6(j) < 0
+               Vm6(j) = 0;
+            else
+            end
         else
             Vm6(j) = 0;
         end
@@ -1468,16 +1623,16 @@ for sq = 1:round(s)
 
         % START LIQUID-PHASE OXYGEN CODE
         % Oxygen mass transfer coefficients for each well
-        kO2_1 = (D(2,2,3)/Dw(2,2,3))*k1*(1 - (P_h - Vm1(j)/S_w)/P_h);
-        kO2_2 = (D(2,6,3)/Dw(2,6,3))*k2*(1 - (P_h - Vm2(j)/S_w)/P_h);
-        kO2_3 = (D(6,2,3)/Dw(6,2,3))*k3*(1 - (P_h - Vm3(j)/S_w)/P_h);
-        kO2_4 = (D(6,6,3)/Dw(6,6,3))*k4*(1 - (P_h - Vm4(j)/S_w)/P_h);
-        kO2_5 = (D(11,2,3)/Dw(11,2,3))*k5*(1 - (P_h - Vm5(j)/S_w)/P_h);
-        kO2_6 = (D(11,6,3)/Dw(11,6,3))*k6*(1 - (P_h - Vm6(j)/S_w)/P_h);
+        kO2_1 = (D(2,2,3)/Dw(2,2,3))*k1;
+        kO2_2 = (D(2,6,3)/Dw(2,6,3))*k2;
+        kO2_3 = (D(6,2,3)/Dw(6,2,3))*k3;
+        kO2_4 = (D(6,6,3)/Dw(6,6,3))*k4;
+        kO2_5 = (D(11,2,3)/Dw(11,2,3))*k5;
+        kO2_6 = (D(11,6,3)/Dw(11,6,3))*k6;
 
         % Well 1
         c1_2(j) = (D1_O2*(c1_3(j-1) - 2*c1_2(j-1) + c1_1(j-1))/(delz1(j-1)^2))*dt + c1_2(j-1);
-        c1_1(j) = (kO2_1*c1_ch(j)/D1_O2 + c1_2(j)/delz1(j))/(kO2_1/(SC*Beta_O2(2,2,3)*D1_O2*R*T_w(2,2,3)) + 1/delz1(j));  % Surface boundary condition (finite difference to decompose dc1_1/dz, derivative equivalent to flux)
+        c1_1(j) = (kO2_1*c1_ch(j)/D1_O2 + c1_2(j)/delz1(j))/(kO2_1/(SC*Beta_O2(2,2,2)*D1_O2*R*T_w(2,2,2)) + 1/delz1(j));  % Surface boundary condition (finite difference to decompose dc1_1/dz, derivative equivalent to flux)
         c1_3(j) = (D1_O2*(c1_4(j-1) - 2*c1_3(j-1) + c1_2(j-1))/(delz1(j-1)^2))*dt + c1_3(j-1);
         c1_4(j) = (D1_O2*(c1_5(j-1) - 2*c1_4(j-1) + c1_3(j-1))/(delz1(j-1)^2))*dt + c1_4(j-1);
         c1_5(j) = (D1_O2*(c1_6(j-1) - 2*c1_5(j-1) + c1_4(j-1))/(delz1(j-1)^2))*dt + c1_5(j-1);
@@ -1503,7 +1658,7 @@ for sq = 1:round(s)
 
         % Well 2
         c2_2(j) = (D2_O2*(c2_3(j-1) - 2*c2_2(j-1) + c2_1(j-1))/(delz2(j-1)^2))*dt + c2_2(j-1);
-        c2_1(j) = (kO2_2*c2_ch(j)/D2_O2 + c2_2(j)/delz2(j))/(kO2_2/(SC*Beta_O2(2,6,3)*D2_O2*R*T_w(2,6,3)) + 1/delz2(j));
+        c2_1(j) = (kO2_2*c2_ch(j)/D2_O2 + c2_2(j)/delz2(j))/(kO2_2/(SC*Beta_O2(2,6,2)*D2_O2*R*T_w(2,6,2)) + 1/delz2(j));
         c2_3(j) = (D2_O2*(c2_4(j-1) - 2*c2_3(j-1) + c2_2(j-1))/(delz2(j-1)^2))*dt + c2_3(j-1);
         c2_4(j) = (D2_O2*(c2_5(j-1) - 2*c2_4(j-1) + c2_3(j-1))/(delz2(j-1)^2))*dt + c2_4(j-1);
         c2_5(j) = (D2_O2*(c2_6(j-1) - 2*c2_5(j-1) + c2_4(j-1))/(delz2(j-1)^2))*dt + c2_5(j-1);
@@ -1529,7 +1684,7 @@ for sq = 1:round(s)
 
         % Well 3
         c3_2(j) = (D3_O2*(c3_3(j-1) - 2*c3_2(j-1) + c3_1(j-1))/(delz3(j-1)^2))*dt + c3_2(j-1);
-        c3_1(j) = (kO2_3*c3_ch(j)/D3_O2 + c3_2(j)/delz3(j))/(kO2_3/(SC*Beta_O2(6,2,3)*D3_O2*R*T_w(6,2,3)) + 1/delz3(j));
+        c3_1(j) = (kO2_3*c3_ch(j)/D3_O2 + c3_2(j)/delz3(j))/(kO2_3/(SC*Beta_O2(6,2,2)*D3_O2*R*T_w(6,2,2)) + 1/delz3(j));
         c3_3(j) = (D3_O2*(c3_4(j-1) - 2*c3_3(j-1) + c3_2(j-1))/(delz3(j-1)^2))*dt + c3_3(j-1);
         c3_4(j) = (D3_O2*(c3_5(j-1) - 2*c3_4(j-1) + c3_3(j-1))/(delz3(j-1)^2))*dt + c3_4(j-1);
         c3_5(j) = (D3_O2*(c3_6(j-1) - 2*c3_5(j-1) + c3_4(j-1))/(delz3(j-1)^2))*dt + c3_5(j-1);
@@ -1555,7 +1710,7 @@ for sq = 1:round(s)
 
         % Well 4
         c4_2(j) = (D4_O2*(c4_3(j-1) - 2*c4_2(j-1) + c4_1(j-1))/(delz4(j-1)^2))*dt + c4_2(j-1);
-        c4_1(j) = (kO2_4*c4_ch(j)/D4_O2 + c4_2(j)/delz4(j))/(kO2_4/(SC*Beta_O2(6,6,3)*D4_O2*R*T_w(6,6,3)) + 1/delz4(j));
+        c4_1(j) = (kO2_4*c4_ch(j)/D4_O2 + c4_2(j)/delz4(j))/(kO2_4/(SC*Beta_O2(6,6,2)*D4_O2*R*T_w(6,6,2)) + 1/delz4(j));
         c4_3(j) = (D4_O2*(c4_4(j-1) - 2*c4_3(j-1) + c4_2(j-1))/(delz4(j-1)^2))*dt + c4_3(j-1);
         c4_4(j) = (D4_O2*(c4_5(j-1) - 2*c4_4(j-1) + c4_3(j-1))/(delz4(j-1)^2))*dt + c4_4(j-1);
         c4_5(j) = (D4_O2*(c4_6(j-1) - 2*c4_5(j-1) + c4_4(j-1))/(delz4(j-1)^2))*dt + c4_5(j-1);
@@ -1581,7 +1736,7 @@ for sq = 1:round(s)
 
         % Well 5
         c5_2(j) = (D5_O2*(c5_3(j-1) - 2*c5_2(j-1) + c5_1(j-1))/(delz5(j-1)^2))*dt + c5_2(j-1);
-        c5_1(j) = (kO2_5*c5_ch(j)/D5_O2 + c5_2(j)/delz5(j))/(kO2_5/(SC*Beta_O2(11,2,3)*D5_O2*R*T_w(11,2,3)) + 1/delz5(j));
+        c5_1(j) = (kO2_5*c5_ch(j)/D5_O2 + c5_2(j)/delz5(j))/(kO2_5/(SC*Beta_O2(11,2,2)*D5_O2*R*T_w(11,2,2)) + 1/delz5(j));
         c5_3(j) = (D5_O2*(c5_4(j-1) - 2*c5_3(j-1) + c5_2(j-1))/(delz5(j-1)^2))*dt + c5_3(j-1);
         c5_4(j) = (D5_O2*(c5_5(j-1) - 2*c5_4(j-1) + c5_3(j-1))/(delz5(j-1)^2))*dt + c5_4(j-1);
         c5_5(j) = (D5_O2*(c5_6(j-1) - 2*c5_5(j-1) + c5_4(j-1))/(delz5(j-1)^2))*dt + c5_5(j-1);
@@ -1607,7 +1762,7 @@ for sq = 1:round(s)
 
         % Well 6
         c6_2(j) = (D6_O2*(c6_3(j-1) - 2*c6_2(j-1) + c6_1(j-1))/(delz6(j-1)^2))*dt + c6_2(j-1);
-        c6_1(j) = (kO2_6*c6_ch(j)/D6_O2 + c6_2(j)/delz6(j))/(kO2_6/(SC*Beta_O2(11,6,3)*D6_O2*R*T_w(11,6,3)) + 1/delz6(j));
+        c6_1(j) = (kO2_6*c6_ch(j)/D6_O2 + c6_2(j)/delz6(j))/(kO2_6/(SC*Beta_O2(11,6,2)*D6_O2*R*T_w(11,6,2)) + 1/delz6(j));
         c6_3(j) = (D6_O2*(c6_4(j-1) - 2*c6_3(j-1) + c6_2(j-1))/(delz6(j-1)^2))*dt + c6_3(j-1);
         c6_4(j) = (D6_O2*(c6_5(j-1) - 2*c6_4(j-1) + c6_3(j-1))/(delz6(j-1)^2))*dt + c6_4(j-1);
         c6_5(j) = (D6_O2*(c6_6(j-1) - 2*c6_5(j-1) + c6_4(j-1))/(delz6(j-1)^2))*dt + c6_5(j-1);
